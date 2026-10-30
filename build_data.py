@@ -129,6 +129,8 @@ def main(xlsx):
 
     nums_path = os.path.join(HERE, "stop_numbers.json")
     nums = json.load(open(nums_path, encoding="utf-8")) if os.path.exists(nums_path) else {}
+    tw_path = os.path.join(HERE, "stop_twins.json")
+    twins = {n: i for i, g in enumerate(json.load(open(tw_path, encoding="utf-8"))) for n in g} if os.path.exists(tw_path) else {}
     hubs_path = os.path.join(HERE, "stop_hubs.json")
     hubs = set(json.load(open(hubs_path, encoding="utf-8"))) if os.path.exists(hubs_path) else set()
     trips_out, stop_names, n = [], [], 0
@@ -172,6 +174,8 @@ def main(xlsx):
                 "lat": c.get("lat"), "lon": c.get("lon")}
         if name in nums:
             item["num"] = nums[name]
+        if name in twins:
+            item["twin"] = twins[name]
         if name in hubs:
             item["hub"] = True
         stops_out.append(item)

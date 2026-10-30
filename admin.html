@@ -1,35 +1,85 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8">
+<html lang="ru" data-theme="auto"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Редактор маршрутов</title>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <style>
-*{box-sizing:border-box}body{margin:0;font:14px/1.4 system-ui,Roboto,sans-serif;color:#1c2330;height:100vh;display:flex;flex-direction:column}
-header{display:flex;gap:10px;align-items:center;padding:8px 14px;background:#1e3a8a;color:#fff}header b{font-size:16px}#st{font-size:12px;opacity:.9;flex:1}
-main{flex:1;display:flex;min-height:0}aside{width:430px;overflow:auto;padding:0;border-right:1px solid #d5dbe5;background:#f7f9fc}#map{flex:1}
-button,select,input{font:inherit}button{padding:5px 10px;border:1px solid #b7c1d3;border-radius:6px;background:#fff;cursor:pointer}button:hover{background:#eef3ff}
-button.pri{background:#16a34a;color:#fff;border-color:#16a34a;font-weight:600}header button{border-color:#fff3}
-select{max-width:100%}aside>select{width:100%;padding:6px;margin:4px 0 10px}
-.box{padding:9px 11px;border-radius:8px;margin:0 0 10px;background:#e8f5ec;border:1px solid #b6e0c2}.box.warn{background:#fff3e0;border-color:#f5c98a}.box.sel{background:#fff8e1;border-color:#f59e0b}.box p{margin:4px 0 8px}
-table{width:100%;border-collapse:collapse}td{padding:3px 2px;vertical-align:middle}td select{width:100%;padding:4px}.tm{width:62px;padding:4px;text-align:center}.tm.bad{border-color:#dc2626;background:#fee}
-td.acts{white-space:nowrap}td.acts button{padding:2px 7px}tr.leg td{font-size:12px;padding:0 4px 4px 70px;cursor:pointer;color:#64748b}tr.leg.miss td{color:#dc2626;font-weight:600}tr.leg.cur td{background:#fff8e1}
-.via{background:#f59e0b;border:2px solid #fff;border-radius:50%;box-shadow:0 0 3px #0008;color:#fff;font:700 11px/18px system-ui;text-align:center;cursor:pointer}
+@font-face{font-family:Nunito;font-weight:600;font-display:swap;src:url(vendor/fonts/nunito-cyrillic-600-normal.woff2) format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:Nunito;font-weight:600;font-display:swap;src:url(vendor/fonts/nunito-latin-600-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2212}
+@font-face{font-family:Nunito;font-weight:700;font-display:swap;src:url(vendor/fonts/nunito-cyrillic-700-normal.woff2) format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:Nunito;font-weight:700;font-display:swap;src:url(vendor/fonts/nunito-latin-700-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2212}
+@font-face{font-family:Nunito;font-weight:800;font-display:swap;src:url(vendor/fonts/nunito-cyrillic-800-normal.woff2) format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:Nunito;font-weight:800;font-display:swap;src:url(vendor/fonts/nunito-latin-800-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2212}
+@font-face{font-family:Roboto;font-weight:400;font-display:swap;src:url(vendor/fonts/roboto-cyrillic-400-normal.woff2) format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:Roboto;font-weight:400;font-display:swap;src:url(vendor/fonts/roboto-latin-400-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2212}
+@font-face{font-family:Roboto;font-weight:500;font-display:swap;src:url(vendor/fonts/roboto-cyrillic-500-normal.woff2) format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:Roboto;font-weight:500;font-display:swap;src:url(vendor/fonts/roboto-latin-500-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2212}
+@font-face{font-family:Roboto;font-weight:700;font-display:swap;src:url(vendor/fonts/roboto-cyrillic-700-normal.woff2) format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:Roboto;font-weight:700;font-display:swap;src:url(vendor/fonts/roboto-latin-700-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2212}
+
+/* ---------- цвета ---------- */
+:root{
+  --acc:#00A6A6; --acc-ink:#06232A;
+  --bg:#F5F4FA; --card:#FFFFFF; --raised:#ECEEF5; --ink:#141B2B; --mute:#677084; --line:#E3E5EE;
+  --acc-text:#007676; --acc-soft:#DCF2F2; --warn:#A24A00; --warn-bg:#FFF1E0; --you:#2F6FED; --casing:#FFFFFF;
+  --shadow:0 -8px 28px rgba(20,27,43,.12);
+  --r614:#DE4A30; --r797:#2F6FED; --r478:#7B4FE0; --r566:#D63E8C; --rx:#475569;
+  --head:Nunito,"Segoe UI",system-ui,sans-serif; --body:Roboto,"Segoe UI",system-ui,sans-serif;
+  --tabh:64px; --sheet-h:200px;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0E1629; --card:#1E293B; --raised:#2A3850; --ink:#F1F5F9; --mute:#9AA7BC; --line:#2E3B52;
+  --acc-text:#33C8C8; --acc-soft:#0F3B46; --warn:#F2B66B; --warn-bg:#3A2C17; --you:#5B9BFF; --casing:#0E1629;
+  --shadow:0 -8px 28px rgba(0,0,0,.45);
+  --r614:#F0674E; --r797:#5B9BFF; --r478:#9B7BFF; --r566:#F06AAB;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:dark){
+  :root[data-theme="auto"]{
+    --bg:#0E1629; --card:#1E293B; --raised:#2A3850; --ink:#F1F5F9; --mute:#9AA7BC; --line:#2E3B52;
+    --acc-text:#33C8C8; --acc-soft:#0F3B46; --warn:#F2B66B; --warn-bg:#3A2C17; --you:#5B9BFF; --casing:#0E1629;
+    --shadow:0 -8px 28px rgba(0,0,0,.45);
+    --r614:#F0674E; --r797:#5B9BFF; --r478:#9B7BFF; --r566:#F06AAB;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;font:400 14px/1.4 var(--body);color:var(--ink);background:var(--bg);height:100vh;display:flex;flex-direction:column}
+header{display:flex;gap:8px;align-items:center;padding:8px 14px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header b{font:800 17px var(--head);margin-right:6px}#st{font-size:12px;color:var(--mute);flex:1;min-width:160px}
+main{flex:1;display:flex;min-height:0}aside{width:440px;overflow:auto;border-right:1px solid var(--line);background:var(--bg)}#map{flex:1}
+button,select,input{font:inherit;color:var(--ink)}
+button{padding:6px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer;font-weight:600}button:hover{border-color:var(--acc)}button:disabled{opacity:.45;cursor:default}
+button.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:800}
+input,select{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 8px}:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+#ts{width:100%;padding:8px;margin:4px 0 10px}.in{padding:12px}
+.box{padding:10px 12px;border-radius:12px;margin:0 0 10px;background:var(--acc-soft);color:var(--acc-text)}.box.warn{background:var(--warn-bg);color:var(--warn)}.box.sel{background:var(--card);color:var(--ink);border:1px solid var(--line)}.box p{margin:4px 0 8px}
+table{width:100%;border-collapse:collapse}td{padding:3px 2px;vertical-align:middle}td.sc{width:100%}
+.tm{width:64px;text-align:center;padding:6px 4px}.tm.bad{border-color:#dc2626;background:var(--warn-bg)}
+.sr{display:flex;gap:4px}.sn{width:100%}.hb{padding:2px 7px;opacity:.4}.hb.on{opacity:1;background:var(--acc-soft);border-color:var(--acc)}
+td.acts{white-space:nowrap}td.acts button{padding:3px 8px}.dh{cursor:grab;color:var(--mute);font-size:16px;padding:0 4px;user-select:none}
+tr.dragging{opacity:.3}tr.over-up>td{border-top:3px solid var(--acc)}tr.over-dn>td{border-bottom:3px solid var(--acc)}
+tr.st.dim{opacity:.8}tr.st.hl>td{background:var(--acc-soft)}tr.st.hl>td:first-child,tr.leg.cur>td{border-left:3px solid var(--acc)}
+tr.leg td{font-size:12px;padding:3px 8px 3px 40px;cursor:pointer;color:var(--mute)}tr.leg.miss td{color:#dc2626;font-weight:700}tr.leg.flag td{color:var(--warn);font-weight:700}tr.leg.cur td{background:var(--warn-bg);color:var(--warn);font-weight:700}
+.tg{display:inline-block;font:700 11px/16px var(--head);padding:0 7px;border-radius:9px;margin-bottom:2px;background:var(--card);color:var(--acc-text);border:1px solid var(--acc)}
+.tw{font-size:11px;color:var(--acc-text);margin:2px 0 0 2px}.hint{font-size:12px;color:var(--mute);margin:0 0 6px}
+.bar{position:sticky;bottom:0;display:flex;gap:8px;flex-wrap:wrap;margin:10px -12px -12px;padding:10px 12px;background:var(--card);border-top:1px solid var(--line);box-shadow:0 -3px 8px #0000000f}
+.okb{border-color:var(--acc);color:var(--acc-text);background:var(--acc-soft)}
+.via{background:#7c3aed;border:2px solid #fff;border-radius:50%;box-shadow:0 0 3px #0008;color:#fff;font:700 11px/18px system-ui;text-align:center;cursor:pointer}
 .ar i{display:block;font-style:normal;font-size:15px;line-height:18px;text-align:center;text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff}.ar.on i{font-size:20px}
-.lb{background:#fff;border:2px solid #475569;border-radius:50%;font:700 11px/18px system-ui;text-align:center;color:#334155;cursor:pointer}.lb.on{background:#f59e0b;color:#fff;border-color:#fff;box-shadow:0 0 4px #000a}
-tr.hl>td{background:#fff3c4}tr.leg.cur td{background:#fde68a;border-left:5px solid #f59e0b;font-weight:700;color:#92400e}
-.via{background:#7c3aed}
-tr.st.dim{opacity:.45}tr.st.hl>td{background:#fff3c4}tr.st.hl>td:first-child,tr.leg.cur>td{border-left:6px solid #f59e0b}
-tr.leg td{padding:3px 8px 3px 40px}tr.leg.flag td{color:#b45309;font-weight:600}tr.leg.cur td{background:#f59e0b;color:#fff;font-size:13px;padding:6px 8px 6px 40px}
-.tg{display:inline-block;font:700 11px/16px system-ui;padding:0 7px;border-radius:9px;color:#fff;margin-bottom:2px}.tg.s{background:#16a34a}.tg.e{background:#334155}
-.dh{cursor:grab;color:#94a3b8;font-size:16px;padding:0 4px;user-select:none}tr.dragging{opacity:.3}tr.over-up>td{border-top:3px solid #7c3aed}tr.over-dn>td{border-bottom:3px solid #7c3aed}
-td.sc{width:100%}.sn{width:100%;padding:5px;border:1px solid #b7c1d3;border-radius:6px}.sr{display:flex;gap:4px}.hb{padding:2px 7px;opacity:.4}.hb.on{opacity:1;background:#e0e7ff;border-color:#818cf8}.hint{font-size:12px;color:#64748b;margin:0 0 6px}
-.in{padding:12px}.bar{position:sticky;bottom:0;display:flex;gap:8px;flex-wrap:wrap;margin:10px -12px -12px;padding:10px 12px;background:#fff;border-top:1px solid #d5dbe5;box-shadow:0 -3px 8px #0000000f}
-tr.st.dim{opacity:.8}tr.st.hl>td{background:#fffaf0}tr.st.hl>td:first-child,tr.leg.cur>td{border-left:3px solid #f59e0b}
-tr.leg.cur td{background:#fffaf0;color:#92400e;font-size:12px;font-weight:600;padding:3px 8px 3px 40px}
-.tg.s,.tg.e{background:#fff;color:#92400e;border:1px solid #e9c46a;font-weight:600}.box.sel{border-color:#f0dcae}.okb{border-color:#16a34a;color:#166534;background:#f0fdf4}
+.lb{background:var(--card);border:2px solid var(--mute);border-radius:50%;font:700 11px/18px system-ui;text-align:center;color:var(--ink);cursor:pointer}.lb.on{background:#f59e0b;color:#fff;border-color:#fff;box-shadow:0 0 4px #000a}
+.md{position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;z-index:2000}.md[hidden]{display:none}
+.mc{background:var(--card);border-radius:16px;padding:16px;width:min(580px,94vw);max-height:84vh;overflow:auto;box-shadow:0 10px 40px #0006}
+.mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.mh b{font:800 17px var(--head)}
+.tr2{display:flex;gap:6px;margin:6px 0 14px}.tr2 input{flex:1;min-width:0}.tr{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}.mc>b{display:block;margin:12px 0 2px}
+#map .leaflet-tile-pane{filter:saturate(.45) contrast(.94) brightness(1.03) hue-rotate(-8deg)}
+:root[data-theme="dark"] #map .leaflet-tile-pane{filter:invert(1) hue-rotate(196deg) saturate(.55) brightness(.78) contrast(.92)}
+@media (prefers-color-scheme:dark){:root[data-theme="auto"] #map .leaflet-tile-pane{filter:invert(1) hue-rotate(196deg) saturate(.55) brightness(.78) contrast(.92)}}
 @media(max-width:800px){main{flex-direction:column}aside{width:100%;height:50%}}
 </style></head><body>
-<header><b>Редактор маршрутов</b><span id="st">Готов к работе</span><button id="dl" class="pri">Скачать data.js</button><button id="fh" title="Перестроить линии, которые начинаются или заканчиваются на узловых остановках (⚓)">Исправить петли у узловых</button><button id="rs">Сбросить правки</button></header>
+<header><b>Редактор маршрутов</b><span id="st">Готов к работе</span><button id="tw">Парные остановки</button><button id="th">Тема</button><button id="dl" class="pri">Скачать data.js</button><button id="fh" title="Перестроить линии, которые начинаются или заканчиваются на узловых остановках (⚓)">Исправить петли у узловых</button><button id="rs">Сбросить правки</button></header>
+<div class="md" id="md" hidden></div>
 <main><aside id="side"></aside><div id="map"></div></main>
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="data.js"></script>
@@ -39,6 +89,7 @@ let D=JSON.parse(JSON.stringify(window.BUS_DATA));D.geom=D.geom||{};D.via=D.via|
 try{const d=JSON.parse(localStorage.getItem(KEY)||"null");if(d&&d.trips)D=d}catch(e){}
 D.okLegs=D.okLegs||[];
 let ti=0,sel=null,showAll=false,place=null,onlyOne=false;
+const cv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const stop=n=>D.stops.find(s=>s.name===n),has=s=>s&&s.lat!=null,pk=(a,b)=>a+"→"+b;
 let tm;const say=m=>{$("st").textContent=m;clearTimeout(tm);tm=setTimeout(()=>{if($("st").textContent===m)$("st").textContent=""},6000)};
@@ -62,9 +113,9 @@ function along(ll,step,only){const c=[0];for(let i=1;i<ll.length;i++)c.push(c[i-
     return[ll[i-1][0]+(ll[i][0]-ll[i-1][0])*f,ll[i-1][1]+(ll[i][1]-ll[i-1][1])*f,brg(ll[i-1],ll[i])]})}
 function draw(fit){
   lg.clearLayers();const t=D.trips[ti],ns=t.stops.map(s=>s.stop),pts=[],ks=legs(t),sa=sel?sel.split("→"):[];
-  const paint=(k)=>{const[a,b]=k.split("→"),A=stop(a),B=stop(b),g=D.geom[k],ok=!!g,ll=ok?g:[[A.lat,A.lon],[B.lat,B.lon]],on=k===sel,col=on?"#f59e0b":ok?"#2563eb":"#dc2626",op=sel&&!on?.35:1;
+  const paint=(k)=>{const[a,b]=k.split("→"),A=stop(a),B=stop(b),g=D.geom[k],ok=!!g,ll=ok?g:[[A.lat,A.lon],[B.lat,B.lon]],on=k===sel,col=on?"#f59e0b":ok?cv("--acc"):"#dc2626",op=sel&&!on?.35:1;
     if(sel&&!on&&onlyOne)return;
-    if(on)L.polyline(ll,{color:"#fff",weight:13,opacity:.95,interactive:false}).addTo(lg);
+    if(on)L.polyline(ll,{color:cv("--casing"),weight:13,opacity:.95,interactive:false}).addTo(lg);
     L.polyline(ll,{color:col,weight:on?7:4,opacity:op,dashArray:ok?null:"8 8",interactive:!sel,bubblingMouseEvents:false}).on("click",()=>{sel=k;render();draw()}).addTo(lg);
     along(ll,on?350:800).forEach(p=>L.marker([p[0],p[1]],{icon:L.divIcon({className:"ar"+(on?" on":""),html:`<i style="transform:rotate(${p[2]}deg);color:${col}">▲</i>`,iconSize:[20,20]}),interactive:false,keyboard:false,opacity:op}).addTo(lg));
     const m=along(ll,1,.5)[0];
@@ -95,7 +146,7 @@ function render(){
     const tg=(hs.has(i)?'<span class="tg s">начало участка</span> ':"")+(he.has(i)?'<span class="tg e">конец участка</span>':"");
     rows+=`<tr class="st ${hs.has(i)||he.has(i)?"hl":sel?"dim":""}" data-i="${i}"><td><span class="dh" draggable="true" data-i="${i}" title="Потяните, чтобы переставить остановку">⠿</span></td>
     <td><input class="tm" data-i="${i}" value="${s.time||""}" placeholder="по треб." title="Время ЧЧ:ММ. Пусто — «при наличии пассажиров»"></td>
-    <td class="sc">${tg}<div class="sr"><input class="sn" list="stl" data-i="${i}" value="${esc(s.stop)}" placeholder="Начните вводить название" title="Нажмите и начните вводить название — список отфильтруется"><button class="hb ${isHub(s.stop)?"on":""}" data-a="hub" data-i="${i}" title="⚓ Узловая остановка (МПЗ, РЦ): общая для всех маршрутов, автобус подъезжает и уезжает с любой стороны без петель">⚓</button></div></td>
+    <td class="sc">${tg}<div class="sr"><input class="sn" list="stl" data-i="${i}" value="${esc(s.stop)}" placeholder="Начните вводить название" title="Нажмите и начните вводить название — список отфильтруется"><button class="hb ${isHub(s.stop)?"on":""}" data-a="hub" data-i="${i}" title="⚓ Узловая остановка (МПЗ, РЦ): общая для всех маршрутов, автобус подъезжает и уезжает с любой стороны без петель">⚓</button></div>${twNames(s.stop).length?`<div class="tw">⇄ пара: ${twNames(s.stop).map(esc).join(", ")}</div>`:""}</td>
     <td class="acts"><button data-a="up" data-i="${i}" title="Выше">↑</button><button data-a="dn" data-i="${i}" title="Ниже">↓</button><button data-a="ins" data-i="${i}" title="Добавить остановку после этой">＋</button><button data-a="del" data-i="${i}" title="Удалить">✕</button></td></tr>`;
     if(i<ns.length-1&&s.stop!==ns[i+1].stop){const k=pk(s.stop,ns[i+1].stop),ok=!!D.geom[k],ready=has(stop(s.stop))&&has(stop(ns[i+1].stop)),n=ks.indexOf(k)+1,fg=ok&&sus(k);
       rows+=`<tr class="leg ${ok?"":"miss"} ${fg?"flag":""} ${k===sel?"cur":""}" data-k="${esc(k)}"><td colspan="4">${!ready?"⚠ нет места на карте":k===sel?"▸ Участок "+n+" — "+(ok?"линия есть":"нет линии")+" (выбран)":"↓ Участок "+n+": "+(ok?(fg?"⚠ проверьте — возможен крюк":rawSus(k)?"линия есть ✓ крюк подтверждён":"линия есть"):"НЕТ линии (пунктир)")}</td></tr>`}});
@@ -172,5 +223,38 @@ $("dl").onclick=()=>{D.built=new Date().toISOString().slice(0,10);
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["window.BUS_DATA = "+JSON.stringify(D)+";\n"],{type:"text/javascript"}));a.download="data.js";a.click();
   say("Файл data.js скачан. Замените им старый data.js на сайте.")};
 $("rs").onclick=()=>{if(confirm("Отменить все правки и вернуть данные из data.js?")){try{localStorage.removeItem(KEY)}catch(e){}location.reload()}};
+
+/* ---- тема и парные остановки ---- */
+let TH="auto";try{TH=localStorage.getItem("busadmin.theme")||"auto"}catch(e){}
+const THN={auto:"авто",light:"светлая",dark:"тёмная"};
+const applyTh=()=>{document.documentElement.dataset.theme=TH;try{localStorage.setItem("busadmin.theme",TH)}catch(e){}$("th").textContent="Тема: "+THN[TH]};
+$("th").onclick=()=>{TH=TH==="auto"?"light":TH==="light"?"dark":"auto";applyTh();draw()};
+const twNames=n=>{const x=stop(n);return x&&x.twin!=null?D.stops.filter(y=>y.twin===x.twin&&y.name!==n).map(y=>y.name):[]};
+let twSug=[];
+function twLink(a,b){const A=stop(a),B=stop(b);if(!A||!B||A===B)return say("Выберите две разные остановки из списка");
+  const ga=A.twin,gb=B.twin;
+  if(ga!=null&&gb!=null&&ga!==gb)D.stops.forEach(x=>{if(x.twin===gb)x.twin=ga});
+  else if(ga!=null)B.twin=ga;else if(gb!=null)A.twin=gb;
+  else{const id=Math.max(-1,...D.stops.map(x=>x.twin==null?-1:x.twin))+1;A.twin=id;B.twin=id}
+  save();twRender();render();say("Остановки связаны в пару")}
+function twRender(){
+  const g={};D.stops.forEach(x=>{if(x.twin!=null)(g[x.twin]=g[x.twin]||[]).push(x.name)});
+  const W=new Set(["в","сторону","со","стороны","ост","пос","ст","центра"]),tk=n=>new Set((n.toLowerCase().match(/[а-яёa-z0-9]+/g)||[]).filter(w=>!W.has(w))),xs=D.stops.filter(has);
+  twSug=[];for(let i=0;i<xs.length&&twSug.length<20;i++)for(let j=i+1;j<xs.length;j++){const a=xs[i],b=xs[j];if(a.twin!=null&&a.twin===b.twin)continue;
+    if(dist([a.lat,a.lon],[b.lat,b.lon])>150)continue;const ta=tk(a.name);if(![...tk(b.name)].some(w=>ta.has(w)))continue;twSug.push([a.name,b.name])}
+  const ks=Object.keys(g);
+  $("md").innerHTML=`<div class="mc"><div class="mh"><b>Парные остановки</b><button data-a="x">✕</button></div>
+  <p class="hint">Парные — две остановки в одном месте, на разных сторонах дороги (например, «Истомкино» и «Истомкино в сторону Ногинска»). Приложение само выберет нужную по направлению поездки и не покажет дубль на карте.</p>
+  <datalist id="stl2">${D.stops.map(x=>`<option value="${esc(x.name)}">`).join("")}</datalist>
+  <div class="tr2"><input id="tw1" list="stl2" placeholder="Первая остановка"><input id="tw2" list="stl2" placeholder="Вторая остановка"><button class="pri" data-a="add">Связать</button></div>
+  ${twSug.length?`<b>Похоже на пары (до 150 м друг от друга)</b>`+twSug.map(([a,b],i)=>`<div class="tr"><span>${esc(a)} ⇄ ${esc(b)}</span><button data-a="sg" data-i="${i}">Связать</button></div>`).join(""):""}
+  <b>Уже связаны (${ks.length})</b>${ks.map(k=>`<div class="tr"><span>${g[k].map(esc).join(" ⇄ ")}</span><button data-a="un" data-k="${k}">Разъединить</button></div>`).join("")||'<p class="hint">Пока нет</p>'}</div>`}
+$("tw").onclick=()=>{$("md").hidden=false;twRender()};
+$("md").addEventListener("click",e=>{if(e.target===$("md"))return $("md").hidden=true;const b=e.target.closest("button");if(!b)return;const a=b.dataset.a;
+  if(a==="x")$("md").hidden=true;
+  else if(a==="add")twLink($("tw1").value.trim(),$("tw2").value.trim());
+  else if(a==="sg"){const q=twSug[+b.dataset.i];if(q)twLink(q[0],q[1])}
+  else if(a==="un"){D.stops.forEach(x=>{if(String(x.twin)===b.dataset.k)delete x.twin});save();twRender();render()}});
+applyTh();
 render();draw(true);
 </script></body></html>

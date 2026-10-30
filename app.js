@@ -16,6 +16,8 @@ const SHORT = {[ENT]:"МПЗ", [RC]:"РЦ"};
 const TO_LABEL = {[ENT]:"До завода", [RC]:"До РЦ"};
 const stopByName = Object.fromEntries(D.stops.map(s=>[s.name,s]));
 const STOP_IDX = Object.fromEntries(D.stops.map((s,i)=>[s.name,i]));
+const TW={};D.stops.forEach(s=>{if(s.twin!=null)(TW[s.twin]=TW[s.twin]||[]).push(s.name)});
+const twinsOf=n=>{const s=stopByName[n];return s&&s.twin!=null?TW[s.twin]:[n]};
 const ROUTES = [...new Set(D.trips.map(t=>t.route))].sort();
 const KIND = {exact:"точное время", approx:"ориентировочно", rc:"для сотрудников РЦ", demand:"по требованию"};
 const DOW = ["вс","пн","вт","ср","чт","пт","сб"];
@@ -37,9 +39,8 @@ const ICONS = {
   bus:'<rect x="5" y="4" width="14" height="14" rx="3"/><path d="M5 12h14M8 21v-3M16 21v-3"/><circle cx="8.5" cy="15" r=".8"/><circle cx="15.5" cy="15" r=".8"/>',
   swap:'<path d="M7 7h11l-3-3M17 17H6l3 3"/>',
   flag:'<path d="M6 21V4M6 5h11l-2 4 2 4H6"/>',
-  pin:'<path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/>',
-  eye:'<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/>',
-  edit:'<path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/>'
+  pin:'<path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>',
+  plane:'<path d="M21 3 3 10.5l7 2.5 2.5 7L21 3z"/><path d="M10 13 21 3"/>'
 };
 const svg = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 
@@ -72,7 +73,7 @@ const S = {
   tab:"map", dest:store.get("bus.dest",ENT), dir:"to", stop:store.get("bus.stop",null), stopManual:store.get("bus.stopManual",false),
   ride:null, mode:store.get("bus.mode","walk"), user:null, locating:false, locErr:null, locWarn:null, picking:false,
   when:null, sheet:"half", theme:store.get("bus.theme","auto"),
-  schedCity:"all", schedDay:null, q:"", open:new Set(), editPick:null, showAll:false
+  schedRoute:"all", schedDay:null, q:"", open:new Set(), editPick:null
 };
 if(!DESTS.includes(S.dest)) S.dest=ENT;
 if(["auto","light","dark"].includes(Q.get("theme"))) S.theme=Q.get("theme");
@@ -140,32 +141,14 @@ function planDay(stop,dir,dest,dk){
 }
 const rideEnd = r => r.dep ? toMin(r.dep) : toMin(r.trip.end);
 
-/* Соседние остановки (другая сторона дороги, ≤130 м): рейсы с них тоже предлагаем, с учётом перехода дороги */
-const CROSS_M = 130;
-const SIBLINGS = {};
-for(const a of D.stops){
-  if(!hasXY(a)||DESTS.includes(a.name)) continue;
-  SIBLINGS[a.name]=D.stops.filter(b=>b!==a&&hasXY(b)&&!DESTS.includes(b.name)&&haversine(a,b)<=CROSS_M)
-    .map(b=>{ const d=haversine(a,b); return {name:b.name,d,min:Math.max(2,Math.ceil(d*1.25/80)+1)}; }).sort((x,y)=>x.d-y.d);
-}
-function planCluster(stop,dir,dest,dk){
-  const cands=[{name:stop,min:0,d:0},...(SIBLINGS[stop]||[])], best=new Map();
-  for(const c of cands) for(const r of planDay(c.name,dir,dest,dk)){
-    best.set(r.trip.id+"|"+c.name,{...r,board:c.name,cross:c.min,crossD:c.d});
-  }
-  return [...best.values()].sort((a,b)=>a.key-b.key||a.cross-b.cross);
-}
-/* во сколько доберёмся: до завода — прибытие, обратно — прибытие + переход дороги */
-const effArr = (r,dir) => r.arr ? toMin(r.arr)+(dir==="from"?r.cross:0) : 1e9;
-
 const SERVED = {};
 (function(){
   for(const d of DESTS){
     SERVED[d]={to:new Set(),from:new Set()};
     for(const s of D.stops){
       if(s.name===d) continue;
-      if(planCluster(s.name,"to",d,"all").length) SERVED[d].to.add(s.name);
-      if(planCluster(s.name,"from",d,"all").length) SERVED[d].from.add(s.name);
+      if(planDay(s.name,"to",d,"all").length) SERVED[d].to.add(s.name);
+      if(planDay(s.name,"from",d,"all").length) SERVED[d].from.add(s.name);
     }
   }
 })();
@@ -177,28 +160,19 @@ function pickRide(plan){
   if(!plan||!plan.rides.length) return {sel:null,idx:-1,auto:false};
   const n=plan.rides.length;
   if(S.ride!=null){ const i=Math.min(S.ride,n-1); return {sel:plan.rides[i],idx:i,auto:false}; }
-  let i=0, why=null;
-  const live=!plan.c.planned && plan.offset===0, d=distToStop();
-  const w = d!=null ? (S.mode==="walk"?walkMin(d):carMin(d))+1 : 0;
-  const reach = r => S.dir!=="to" || !live || d==null || !r.dep || toMin(r.dep)-w-r.cross>=plan.c.min;
-  const cand = plan.rides.map((r,k)=>k).filter(k=>reach(plan.rides[k]));
-  if(cand.length){
-    const len = r => (r.dep&&r.arr) ? toMin(r.arr)-toMin(r.dep) : 1e9;
-    i=cand[0]; if(i>0) why="reach";
-    for(const k of cand.slice(1)){
-      const a=plan.rides[k], b=plan.rides[i];
-      if(effArr(a,S.dir)+5<=effArr(b,S.dir)){ i=k; why="fast"; }
-      else if(a.trip.id===b.trip.id && a.board!==b.board && effArr(a,S.dir)<=effArr(b,S.dir)+1 && len(a)+5<=len(b)){ i=k; why="short"; }   // тот же автобус, но без лишней поездки
-    }
+  let i=0;
+  if(S.dir==="to" && S.user && !plan.c.planned && plan.offset===0){
+    const d=distToStop();
+    if(d!=null){ const w=(S.mode==="walk"?walkMin(d):carMin(d))+1; const k=plan.rides.findIndex(r=>r.dep && toMin(r.dep)-w>=plan.c.min); if(k>0) i=k; }
   }
-  return {sel:plan.rides[i],idx:i,auto:true,why};
+  return {sel:plan.rides[i],idx:i,auto:true};
 }
 function upcomingPlan(){
   if(!S.stop) return null;
   const c=ctx();
   for(let off=0;off<8;off++){
     const date=new Date(c.date.getFullYear(),c.date.getMonth(),c.date.getDate()+off);
-    let rides=planCluster(S.stop,S.dir,S.dest,dkOf(date));
+    let rides=planDay(S.stop,S.dir,S.dest,dkOf(date));
     if(off===0) rides=rides.filter(r=>rideEnd(r)>=c.min);
     if(rides.length) return {rides,offset:off,date,c};
   }
@@ -209,6 +183,12 @@ function upcomingPlan(){
 const walkMin = m => Math.max(1,Math.round(m*1.25/80));
 const carMin  = m => Math.max(1,Math.round(m*1.35/450));
 function distToStop(){ const s=S.stop&&stopByName[S.stop]; return (S.user&&hasXY(s)) ? haversine(S.user,s) : null; }
+/* парные остановки (по разные стороны дороги): берём ту, у которой есть рейсы в нужную сторону */
+function resolveStop(n){
+  const g=twinsOf(n); if(g.length<2) return n;
+  const c=g.filter(x=>SERVED[S.dest][S.dir].has(x));
+  return !c.length||c.includes(n)?n:c[0];
+}
 function nearestStop(){
   if(!S.user) return null;
   let best=null;
@@ -238,7 +218,7 @@ function renderSheet(){
   const pr=pickRide(plan), sel=pr.sel;
   /* --- заголовок --- */
   if(!S.stop){
-    head.innerHTML=`<button class="titlebtn" type="button" data-act="pick-stop"><span class="t"><h2>Откуда поедете?</h2><small>Выберите остановку, адрес или определите, где вы</small></span><span class="chg">${svg("edit")}Выбрать</span></button>`;
+    head.innerHTML=`<button class="titlebtn" type="button" data-act="pick-stop"><span class="t"><h2>Откуда поедете?</h2><small>Выберите остановку или определите, где вы</small></span>${svg("chev")}</button>`;
   }else{
     const near=nearestStop(), isNear=near&&near.name===S.stop;
     const sub = dist!=null ? `${isNear&&!S.stopManual?"Ближайшая остановка":"Остановка"} · ${fmtDist(dist)} от вас` : "Остановка";
@@ -247,7 +227,7 @@ function renderSheet(){
       const cd = (!plan.c.planned && plan.offset===0 && sel.dep) ? " · через "+human(toMin(sel.dep)-plan.c.min) : "";
       peek=`<div class="peekline"><span class="badge b${sel.trip.route}">${sel.trip.route}</span><span>${sel.dep?sel.dep:"по требованию"}${plan.offset>0?" · "+dayWord(plan.date,plan.c.today):""}${esc(cd)}</span></div>`;
     }else peek=`<div class="peekline mute">Рейсов нет</div>`;
-    head.innerHTML=`<button class="titlebtn" type="button" data-act="pick-stop"><span class="t"><small class="lab">${S.dir==="to"?"Откуда":"Куда"}</small><h2>${esc(S.stop)}</h2><small>${sub}</small></span><span class="chg">${svg("edit")}Изменить</span></button>${peek}`;
+    head.innerHTML=`<button class="titlebtn" type="button" data-act="pick-stop"><span class="t"><h2>${esc(S.stop)}</h2><small>${sub}</small></span>${svg("chev")}</button>${peek}`;
   }
   /* --- тело --- */
   let html="";
@@ -280,9 +260,7 @@ function renderSheet(){
   }
   body.innerHTML=html;
   /* --- переключатель направления (как в примере: внизу шторки) --- */
-  foot.innerHTML=`<div class="seg" role="group" aria-label="Направление">
-    <button type="button" data-act="dir" data-v="to" aria-pressed="${S.dir==="to"}">${TO_LABEL[S.dest]}</button>
-    <button type="button" data-act="dir" data-v="from" aria-pressed="${S.dir==="from"}">Обратно</button></div>`;
+  foot.innerHTML=""; foot.style.display="none";
 }
 
 function timelineHTML(plan,pr,dist){
@@ -300,31 +278,29 @@ function timelineHTML(plan,pr,dist){
     return out;
   }
   const dayNote = plan.offset>0 ? `<div class="notice warn" style="margin:0 0 6px"><b>${c.planned?"На выбранное время рейсов больше нет":"Сегодня рейсов больше нет"}</b><span>Показываем рейсы: ${dayWord(plan.date,c.today)}.</span></div>` : "";
-  const boardName = to ? sel.board : destName;
-  const alightName = to ? destName : sel.board;
-  const crossing = sel.board!==stopName;
-  const crossTxt = crossing ? `<div class="cross">${svg("swap")}<span>${to?`Перейдите дорогу на остановку «${esc(sel.board)}»`:`Выйдите на «${esc(sel.board)}» и перейдите дорогу к «${esc(stopName)}»`}: ≈${sel.cross} мин, ${fmtDist(sel.crossD)}</span></div>` : "";
+  const boardName = to ? stopName : destName;
+  const alightName = to ? destName : stopName;
   const idx = pr.idx;
-  const first = idx===0 && !crossing && !pr.why;
+  const first = idx===0;
 
   /* карточка выбранного рейса */
   const live = !c.planned && plan.offset===0 && sel.dep;
   const cd = live ? (toMin(sel.dep)-c.min<=0 ? "сейчас" : "через "+human(toMin(sel.dep)-c.min)) : "";
   const leaveBy = (to && live && dist!=null)
-    ? (()=>{ const w0 = S.mode==="walk"?walkMin(dist):carMin(dist), w = w0+sel.cross, left=toMin(sel.dep)-c.min, lb=toMin(sel.dep)-w-1;
+    ? (()=>{ const w = S.mode==="walk"?walkMin(dist):carMin(dist), left=toMin(sel.dep)-c.min, lb=toMin(sel.dep)-w-1;
         return lb>=c.min ? `<div class="go">${svg(S.mode==="walk"?"walk":"car")}<span>Выйдите до ${fmtMin(lb)}</span></div>`
-          : `<div class="go late">${svg("clock")}<span>Не успеете: до остановки ≈${w} мин${sel.cross?" с переходом дороги":""}, до отправления ${human(Math.max(0,left))}</span></div>`; })()
+          : `<div class="go late">${svg("clock")}<span>Не успеете: до остановки ≈${w} мин, до отправления ${human(Math.max(0,left))}</span></div>`; })()
     : "";
   const tt = sel.trip;
   const rideCard = `<div class="ride">
-    <div class="lbl">${pr.auto?(pr.why==="short"?"Лучше перейти дорогу — без лишней поездки":pr.why==="fast"?"Быстрее всего доберётесь":first?"Ближайший автобус":pr.why==="reach"?"Ближайший, на который успеете":"Ближайший автобус"):"Выбранный рейс"}${plan.offset>0?" · "+dayWord(plan.date,c.today):""}</div>
+    <div class="lbl">${first?"Ближайший автобус":(pr.auto?"Ближайший, на который успеете":"Выбранный рейс")}${plan.offset>0?" · "+dayWord(plan.date,c.today):""}</div>
     <div class="big"><span class="t">${sel.dep?(sel.kind==="approx"?"≈":"")+sel.dep:"по требованию"}</span><span class="badge b${tt.route}">${tt.route}</span>${cd?`<span class="cd">${cd}</span>`:""}</div>
     <div class="meta">${tt.part==="morning"?"Утренний":"Вечерний"} рейс ${tt.start}–${tt.end} · ${rideTag(sel)}${sel.note?" · "+esc(sel.note):""}${sel.xfer?" · с пересадкой":""}</div>
     ${leaveBy}</div>`;
   /* остальные рейсы мелко */
   const others = plan.rides.map((r,i)=>({r,i})).filter(x=>x.i!==idx);
   const chips = others.length ? `<div class="others"><div class="lbl">${others.length===1?"Ещё один рейс":"Другие рейсы"}</div><div class="chips">${others.map(({r,i})=>
-    `<button type="button" class="rchip d${r.trip.route}${r.kind==="approx"?" ap":""}${r.dep?"":" dem"}" data-act="ride" data-i="${i}"><i class="dot"></i>${r.dep?r.dep:"по треб."}${r.board!==stopName?`<span class="x" title="С другой стороны дороги">⇄</span>`:""}<span class="mute" style="font-weight:600">${r.trip.route}</span></button>`).join("")}</div></div>` : "";
+    `<button type="button" class="rchip d${r.trip.route}${r.kind==="approx"?" ap":""}${r.dep?"":" dem"}" data-act="ride" data-i="${i}"><i class="dot"></i>${r.dep?r.dep:"по треб."}<span class="mute" style="font-weight:600">${r.trip.route}</span></button>`).join("")}</div></div>` : "";
   /* остановки в пути */
   const pathItems=[];
   sel.legs.forEach((leg,li)=>{
@@ -335,14 +311,15 @@ function timelineHTML(plan,pr,dist){
     }
   });
   const inBetween = sel.legs.reduce((n,l)=>n+(l.j-l.i-1),0);
-  const path = `<details class="path"><summary>Остановки в пути${inBetween>0?` (${inBetween})`:""}</summary><ul class="pathlist">${pathItems.join("")}</ul></details>`;
+  const pk=[S.stop,S.dir,S.dest,sel.legs.map(l=>l.trip.id).join("+"),sel.dep||""].join("|");
+  const path = `<details class="path" data-pk="${esc(pk)}"${S.pathOpen===pk?" open":""}><summary>Остановки в пути${inBetween>0?` (${inBetween})`:""}</summary><ul class="pathlist">${pathItems.join("")}</ul></details>`;
 
   const boardNode = `<li class="node"><div class="rail"><div class="ico">${svg("bus")}</div></div><div>
-      <h3>${esc(boardName)}</h3><div class="sub">${to?"Посадка":"Отправление от "+(destName===ENT?"завода":"РЦ")}</div>${crossTxt&&to?crossTxt:""}${dayNote}${rideCard}${chips}${path}</div></li>`;
+      <h3>${esc(boardName)}</h3><div class="sub">${to?"Посадка":"Отправление от "+(destName===ENT?"завода":"РЦ")}</div>${dayNote}${rideCard}${chips}${path}</div></li>`;
 
   const dur = (sel.dep&&sel.arr) ? ` · в пути ${human(toMin(sel.arr)-toMin(sel.dep))}` : "";
   const alightNode = `<li class="node${to?"":" dash"}"><div class="rail"><div class="ico plain"></div></div><div>
-      <h3>${esc(alightName)}</h3><div class="sub">${sel.arr?`Прибытие в ${sel.arr}${dur}`:"Время прибытия не указано"}</div>${crossTxt&&!to?crossTxt:""}</div></li>`;
+      <h3>${esc(alightName)}</h3><div class="sub">${sel.arr?`Прибытие в ${sel.arr}${dur}`:"Время прибытия не указано"}</div></div></li>`;
 
   let xferNode="";
   if(sel.xfer){
@@ -357,7 +334,7 @@ function timelineHTML(plan,pr,dist){
   if(S.user){
     const w=dist!=null?walkMin(dist):null, cm=dist!=null?carMin(dist):null;
     you=`<li class="node${to?" dash":""}"><div class="rail"><div class="ico you">${svg("user")}</div></div><div>
-      <h3>Моё местоположение</h3><div class="sub">${S.user.manual?"указано вручную · точку на карте можно перетащить":"определено по датчикам телефона"}</div>
+      <h3>Моё местоположение</h3><div class="sub">${S.user.manual?"указано вручную":"определено по датчикам телефона"}</div>
       ${dist!=null?`<div class="leg seg flat" role="group" aria-label="Как добираться до остановки" style="margin-top:10px">
         <button type="button" data-act="mode" data-v="walk" aria-pressed="${S.mode==="walk"}">${svg("walk")}≈${w} мин</button>
         <button type="button" data-act="mode" data-v="car" aria-pressed="${S.mode==="car"}">${svg("car")}≈${cm} мин</button></div>
@@ -375,13 +352,17 @@ function timelineHTML(plan,pr,dist){
    Верхняя панель, кнопки на карте, вкладки
    ============================================================ */
 function renderTop(){
-  $("destSeg").innerHTML = DESTS.map(d=>`<button type="button" data-act="dest" data-v="${esc(d)}" aria-pressed="${S.dest===d}">${esc(d)}</button>`).join("");
+  const toP=S.dir==="to", plantName=S.dest===ENT?"Завод":S.dest;
+  const meLbl=(S.user&&!S.stopManual)||!S.stop?"Моё местоположение":S.stop;
+  const me=`<button type="button" class="ep" data-act="pick-stop">${svg("user")}<span><small>${toP?"Откуда":"Куда"}</small>${esc(meLbl)}</span></button>`;
+  const pl=`<button type="button" class="ep" data-act="toggle-dest" title="Сменить: завод / РЦ Кудиново">${svg("bus")}<span><small>${toP?"Куда":"Откуда"}</small>${esc(plantName)}</span></button>`;
+  $("destSeg").innerHTML=(toP?me:pl)+`<button type="button" class="sw" data-act="swap" aria-label="Поменять местами" title="Поменять местами">${svg("swap")}</button>`+(toP?pl:me);
   const chip=$("whenChip");
   chip.innerHTML=svg("clock")+esc(whenLabel());
   chip.classList.toggle("on",!!S.when);
-  $("fabs").innerHTML=`<button class="fab${S.showAll?" on":""}" type="button" data-act="show-all" aria-pressed="${S.showAll}" aria-label="Показать все остановки" title="Все остановки">${svg("eye")}</button>
-    <button class="fab" type="button" data-act="fit-route" aria-label="Показать весь маршрут" title="Весь маршрут">${svg("route")}</button>
-    <button class="fab${S.user&&!S.user.manual?" on":""}" type="button" data-act="locate" aria-label="Где я" title="Где я">${svg("locate")}</button>`;
+  $("fabs").innerHTML=`<button class="fab sm" type="button" data-act="zoom" data-v="1" aria-label="Приблизить">+</button>
+    <button class="fab sm" type="button" data-act="zoom" data-v="-1" aria-label="Отдалить">−</button>
+    <button class="fab${S.user&&!S.user.manual?" on":""}" type="button" data-act="locate" aria-label="Где я" title="Где я">${svg("plane")}</button>`;
   $("tabMap").innerHTML=svg("map")+"Карта";
   $("tabSched").innerHTML=svg("list")+"Расписание";
 }
@@ -399,35 +380,26 @@ function setTab(t){
 /* ============================================================
    Расписание
    ============================================================ */
-const CITIES = [["Ногинск",/Ногинск/],["Электросталь",/Электросталь/],["Электроугли",/Электроугли/],["Лосино-Петровский",/Лосино-Петровский/],["Монино",/пос\. Монино/],["Свердловский",/Свердловский/]]
-  .filter(([,re])=>D.trips.some(t=>t.stops.some(s=>re.test(s.stop))));
-const CITY_RE = Object.fromEntries(CITIES);
-function schedInfo(){
-  const c=ctx();
-  if(S.schedDay==="tom"){ const d=new Date(c.today.getFullYear(),c.today.getMonth(),c.today.getDate()+1); return {dk:dkOf(d),live:false,label:"завтра, "+dateLabel(d)+(dkOf(d)==="sat"?" (суббота)":"")}; }
-  if(S.schedDay==="sat") return {dk:"sat",live:false,label:"по субботам"};
-  if(S.schedDay==="work") return {dk:"work",live:false,label:"в будни и воскресенье"};
-  return {dk:dkOf(c.date),live:sameDay(c.date,c.today),label:dateLabel(c.date)+(dkOf(c.date)==="sat"?" (суббота)":"")};
-}
+function schedDay(){ return S.schedDay || dkOf(ctx().date); }
 function renderSchedHead(){
-  const c=ctx();
-  const cities = [["all","Все города"],...CITIES.map(([n])=>[n,n])].map(([k,l])=>`<button class="chip" type="button" data-act="scity" data-v="${esc(k)}" aria-pressed="${S.schedCity===k}">${esc(l)}</button>`).join("");
-  const first = S.when ? dateLabel(c.date).replace(/^./,x=>x.toUpperCase()) : "Сегодня";
-  const days = [[null,first],["tom","Завтра"],["work","Будни и воскресенье"],["sat","Суббота"]].map(([k,l])=>`<button class="chip" type="button" data-act="sday" data-v="${k||""}" aria-pressed="${S.schedDay===k}">${l}</button>`).join("")
-    + `<button class="chip when${S.when?" on":""}" type="button" data-act="open-when">${svg("clock")}${esc(whenLabel())}</button>`;
+  const c=ctx(), dl=dateLabel(c.date);
+  const chips = ["all",...ROUTES].map(r=>`<button class="chip" type="button" data-act="sroute" data-v="${r}" aria-pressed="${S.schedRoute===r}">${r==="all"?"Все":r}</button>`).join("");
+  const days = [[null,dl.replace(/^./,x=>x.toUpperCase())],["work","Будни, вс"],["sat","Суббота"]].map(([k,l])=>`<button class="chip" type="button" data-act="sday" data-v="${k||""}" aria-pressed="${S.schedDay===k}">${l}</button>`).join("");
   $("schedHead").innerHTML=`<div class="row"><h1>Расписание</h1>
+    <button class="whenchip${S.when?" on":""}" type="button" data-act="open-when">${svg("clock")}${esc(whenLabel())}</button>
     <button class="iconbtn" type="button" data-act="theme" aria-label="Тема оформления" title="Тема: ${({auto:"как в системе",light:"светлая",dark:"тёмная"})[S.theme]}">${svg("theme")}</button></div>
-    <div class="hscroll" role="group" aria-label="Город">${cities}</div>
-    <div class="hscroll" role="group" aria-label="День и время" style="padding-top:2px">${days}</div>
+    <div class="hscroll" role="group" aria-label="Маршрут">${chips}</div>
+    <div class="hscroll" role="group" aria-label="День" style="padding-top:2px">${days}</div>
     <label class="search">${svg("search")}<input id="schedQ" type="search" placeholder="Найти остановку" value="${esc(S.q)}" autocomplete="off"></label>`;
 }
 function renderSchedList(){
-  const {dk,live,label}=schedInfo(), c=ctx(), q=S.q.trim().toLowerCase(), cre=CITY_RE[S.schedCity]||null;
-  let trips=tripsFor(dk);
-  if(cre) trips=trips.filter(t=>t.stops.some(s=>cre.test(s.stop)));
+  const dk=schedDay(), c=ctx(), q=S.q.trim().toLowerCase();
+  const live = !S.schedDay && sameDay(c.date,c.today);
+  let trips=tripsFor(dk).filter(t=>S.schedRoute==="all"||t.route===S.schedRoute);
   if(q) trips=trips.filter(t=>t.stops.some(s=>s.stop.toLowerCase().includes(q)));
-  let html=`<div class="dayline">Рейсы ${esc(label)}${cre?" · "+esc(S.schedCity):""}</div>`;
-  if(!trips.length) html+=`<div class="empty">Ничего не найдено. Измените город, день или поиск.</div>`;
+  const label = S.schedDay ? (dk==="sat"?"по субботам":"в будни и воскресенье") : dateLabel(c.date)+(dk==="sat"?" (суббота)":"");
+  let html=`<div class="dayline">Рейсы ${esc(label)}</div>`;
+  if(!trips.length) html+=`<div class="empty">Ничего не найдено. Измените маршрут, день или поиск.</div>`;
   const routes=[...new Set(trips.map(t=>t.route))];
   for(const r of routes){
     const ts=trips.filter(t=>t.route===r).sort((a,b)=>toMin(a.start)-toMin(b.start));
@@ -441,7 +413,7 @@ function renderSchedList(){
         <span class="chev">${svg("chev")}</span></button>`;
       if(open){
         html+=`<div class="tbody"><ol class="stline">${t.stops.map(s=>{
-          const ent=DESTS.includes(s.stop), hit=(q&&s.stop.toLowerCase().includes(q))||(!q&&cre&&cre.test(s.stop)), dem=!s.time;
+          const ent=DESTS.includes(s.stop), hit=q&&s.stop.toLowerCase().includes(q), dem=!s.time;
           const notes=[]; if(s.time&&s.kind==="exact") notes.push("точное время"); if(s.kind==="rc"&&s.time) notes.push("для сотрудников РЦ"); if(dem) notes.push("при наличии пассажиров"); if(s.note) notes.push(s.note);
           return `<li class="${ent?"ent ":""}${hit?"hit ":""}${dem?"dem":""}"><button type="button" data-act="goto-stop" data-si="${STOP_IDX[s.stop]}">
             <span class="tm ${s.kind==="approx"?"ap":""}${dem?" nn":""}">${dem?"по требо&shy;ванию":(s.kind==="approx"?"≈":"")+s.time}</span><span class="rl"><i></i></span>
@@ -458,8 +430,8 @@ function renderSched(){ renderSchedHead(); renderSchedList(); }
    Модальные окна: «Когда поедете?» и выбор остановки
    ============================================================ */
 const modalRoot=$("modalRoot");
-function openModal(title,inner,onOpen,cls=""){
-  modalRoot.innerHTML=`<div class="modal ${cls}" data-act="modal-bg"><div class="mcard" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+function openModal(title,inner,onOpen){
+  modalRoot.innerHTML=`<div class="modal" data-act="modal-bg"><div class="mcard" role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <div class="mhead"><h3>${esc(title)}</h3><button class="mclose" type="button" data-act="close-modal" aria-label="Закрыть">${svg("close")}</button></div>
     <div class="mbody">${inner}</div></div></div>`;
   onOpen&&onOpen();
@@ -480,25 +452,14 @@ function openWhen(){
 function applyWhen(){
   const d=$("wDate").value, t=$("wTime").value;
   if(!d||!t){ toast("Выберите дату и время"); return; }
-  S.when={date:d,time:t}; S.ride=null; S.schedDay=null; closeModal(); refreshAll(true);
+  S.when={date:d,time:t}; S.ride=null; closeModal(); refreshAll(true);
 }
 
-let PICK_LIST=[], ADDR_RES=[];
+let PICK_LIST=[];
 function openStopPicker(){
-  const to=S.dir==="to";
-  openModal(to?"Откуда поедете?":"Куда поедете?",`
-    <label class="search" style="margin:0 0 10px;background:var(--raised)">${svg("search")}<input id="stopQ" type="search" placeholder="Остановка или адрес" enterkeyhint="search" autocomplete="off"></label>
-    <div class="row2 pickact">
-      <button class="btn" type="button" data-act="pick-locate">${svg("locate")}Где я</button>
-      <button class="btn sec" type="button" data-act="pick-manual">${svg("pin")}Точка на карте</button></div>
-    <div id="addrBox"></div>
-    <div class="lbl2" id="stopHint"></div>
-    <ul class="stoplist" id="stopList"></ul>`,()=>{
-    renderStopList(""); const i=$("stopQ");
-    i.addEventListener("input",()=>renderStopList(i.value));
-    i.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); searchAddress(i.value); } });
-    if(desktop()) setTimeout(()=>i.focus(),80);
-  },"drawer");
+  openModal("Откуда вы едете?",`<div class="row2" style="margin:0 0 10px"><button class="btn" type="button" data-act="locate-close">${svg("plane")}Определить меня</button><button class="btn sec" type="button" data-act="manual-close">${svg("pin")}Пин на карте</button></div><label class="search" style="margin:0 0 4px;background:var(--raised)">${svg("search")}<input id="stopQ" type="search" placeholder="Название остановки" autocomplete="off"></label><ul class="stoplist" id="stopList"></ul>`,()=>{
+    renderStopList(""); const i=$("stopQ"); i.addEventListener("input",()=>renderStopList(i.value)); if(!desktop()) setTimeout(()=>i.focus(),80);
+  });
 }
 function renderStopList(q){
   q=q.trim().toLowerCase();
@@ -506,28 +467,9 @@ function renderStopList(q){
   if(q) list=list.filter(x=>x.n.toLowerCase().includes(q));
   list.sort((a,b)=> (a.d!=null&&b.d!=null) ? a.d-b.d : (a.d==null&&b.d!=null) ? 1 : (a.d!=null&&b.d==null) ? -1 : a.n.localeCompare(b.n,"ru"));
   PICK_LIST=list;
-  const near = S.user && S.locWarn!=="far";
-  $("stopHint").textContent = q ? (list.length?"Остановки":"Остановки не найдены") : (near?"Ближайшие остановки":"Все остановки");
-  const addrBtn = q.length>=3 ? `<li><button type="button" class="addrrow" data-act="addr-search">${svg("search")}<span>Найти адрес «${esc(q)}»</span></button></li>` : "";
-  $("stopList").innerHTML = addrBtn + (list.length ? list.map((x,i)=>`<li><button type="button" data-act="pick" data-i="${i}">
+  $("stopList").innerHTML = list.length ? list.map((x,i)=>`<li><button type="button" data-act="pick" data-i="${i}">
     <span class="n">${esc(x.n)}</span><span class="d">${x.d!=null&&!(S.locWarn==="far")?fmtDist(x.d):""}</span>
-    <span class="r">${[...(ROUTES_AT[x.n]||[])].sort().map(r=>`<span class="badge b${r}">${r}</span>`).join("")}</span></button></li>`).join("") : (q.length<3?`<li class="empty">Не найдено</li>`:""));
-}
-async function searchAddress(q){
-  q=(q||"").trim(); if(q.length<3){ toast("Введите адрес подробнее"); return; }
-  const box=$("addrBox"); if(!box) return;
-  box.innerHTML=`<div class="notice"><b>Ищем адрес…</b></div>`;
-  try{
-    const b=CFG.searchBounds;
-    const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=6&accept-language=ru&bounded=1&q="+encodeURIComponent(q)+"&viewbox="+b[0][1]+","+b[1][0]+","+b[1][1]+","+b[0][0]);
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    ADDR_RES=(await r.json()).map(x=>({lat:+x.lat,lon:+x.lon,name:x.display_name.split(", ").slice(0,3).join(", ")}));
-    box.innerHTML = ADDR_RES.length
-      ? `<div class="lbl2">Адреса</div><ul class="stoplist">${ADDR_RES.map((a,i)=>`<li><button type="button" class="addrrow" data-act="addr-pick" data-i="${i}">${svg("pin")}<span>${esc(a.name)}</span></button></li>`).join("")}</ul>`
-      : `<div class="notice warn"><b>Адрес не найден</b><span>Уточните запрос (улица, дом, город) или укажите точку на карте.</span></div>`;
-  }catch(e){
-    box.innerHTML=`<div class="notice warn"><b>Не удалось найти адрес</b><span>Проверьте подключение или укажите точку на карте.</span></div>`;
-  }
+    <span class="r">${[...(ROUTES_AT[x.n]||[])].sort().map(r=>`<span class="badge b${r}">${r}</span>`).join("")}</span></button></li>`).join("") : `<li class="empty">Не найдено</li>`;
 }
 
 /* ============================================================
@@ -568,14 +510,16 @@ document.addEventListener("visibilitychange",()=>{
     LOC.watch=navigator.geolocation.watchPosition(p=>onPos(p,false),()=>{}, {enableHighAccuracy:true,maximumAge:10000,timeout:30000});
 });
 function startManual(){
-  S.picking=true; stopWatch(); setTab("map"); setSheet("peek");
-  toast("Нажмите на карте там, где вы находитесь",6000);
+  stopWatch(); setTab("map"); setSheet("half");
+  const c=MAP.ready?MAP.map.getCenter():null, r=regionCenter();
+  setManual(S.user?{lat:S.user.lat,lng:S.user.lon}:c?{lat:c.lat,lng:c.lng}:{lat:r.lat,lng:r.lon});
+  toast("Перетащите пин туда, где вы находитесь",5000);
 }
-function setManual(ll){
+function setManual(ll,quiet){
   S.picking=false; S.user={lat:ll.lat,lon:ll.lng,acc:0,manual:true}; S.locWarn=null; S.locErr=null; S.locating=false;
-  S.stopManual=false; const before=S.stop; autoPickStop(); store.set("bus.stopManual",S.stopManual);
-  setSheet("half"); renderTop(); renderSheet(); drawMap({fit:"local"});
-  if(before===S.stop) {}
+  S.stopManual=false; autoPickStop(); store.set("bus.stopManual",S.stopManual);
+  if(!quiet) setSheet("half");
+  renderTop(); renderSheet(); drawMap({fit:quiet?null:"local"});
 }
 
 /* ============================================================
@@ -632,10 +576,9 @@ const MAP = {
   load(){
     if(!window.L){ toast("Не удалось загрузить карту: нет папки vendor/leaflet",8000); return; }
     try{
-      const map=this.map=L.map("map",{zoomControl:false,attributionControl:false,zoomSnap:.5,minZoom:8,maxZoom:18,
+      const map=this.map=L.map("map",{zoomControl:false,attributionControl:false,zoomSnap:.5,minZoom:8,maxZoom:18,inertia:true,inertiaDeceleration:1700,inertiaMaxSpeed:2800,easeLinearity:.18,wheelDebounceTime:30,wheelPxPerZoomLevel:100,bounceAtZoomLimits:false,
         maxBounds:L.latLngBounds(CFG.searchBounds).pad(.6),maxBoundsViscosity:.8}).setView([55.83,38.35],10);
-      L.control.zoom({position:"topleft",zoomInTitle:"Приблизить",zoomOutTitle:"Отдалить"}).addTo(map);
-      L.tileLayer(CFG.tileUrl,{maxZoom:19,detectRetina:true}).addTo(map);
+      L.tileLayer(CFG.tileUrl,{maxZoom:19,detectRetina:true,updateWhenIdle:false,keepBuffer:4}).addTo(map);
       for(const k of ["route","stops","walk","pins","user"]) this.g[k]=L.layerGroup().addTo(map);
       this.ready=true;
       if(EDIT||CFG.geocodeMissing){ const c=store.get("bus.coords.v1",{}); for(const s of D.stops) if(!hasXY(s)&&c[s.name]) Object.assign(s,c[s.name]); }
@@ -703,37 +646,27 @@ function drawMap(opts={}){
     sel.legs.forEach(leg=>{ for(let k=leg.i;k<=leg.j;k++) pathStops.add(leg.trip.stops[k].stop); });
   }
   /* остановки */
-  const served=SERVED[S.dest][S.dir], focus=!EDIT && !!sel && !S.showAll;
+  const served=SERVED[S.dest][S.dir];
   for(const s of D.stops){
     if(!hasXY(s)) continue;
     if(!EDIT){ if(DESTS.includes(s.name)) continue; if(!served.has(s.name)&&s.name!==S.stop) continue;
-      if(focus && !pathStops.has(s.name) && s.name!==S.stop) continue; }
+      if(s.twin!=null&&s.name!==S.stop){ const c=twinsOf(s.name).filter(x=>served.has(x)); if(c.length>1&&c[0]!==s.name) continue; } }
     MAP.g.stops.addLayer(stopMarker(s,{sel:s.name===S.stop,path:pathStops.has(s.name)}));
   }
   /* МПЗ и РЦ */
   if(!EDIT) for(const d of DESTS){
     const s=stopByName[d]; if(!hasXY(s)) continue;
-    if(focus && d!==S.dest && !pathStops.has(d)) continue;
     const mk=L.marker([s.lat,s.lon],{icon:L.divIcon({className:"pin"+(S.dest===d?" act":"")+(S.stop===d?" sel":""),html:`<span>${SHORT[d]}</span>`,iconSize:[S.dest===d?64:54,34],iconAnchor:[S.dest===d?32:27,17]}),zIndexOffset:1000,title:d});
     mk.on("click",()=>setDest(d)); MAP.g.pins.addLayer(mk);
   }
   /* я и путь пешком */
   const st=stopByName[S.stop];
   if(S.user){
-    if(S.user.manual){
-      const um=L.marker([S.user.lat,S.user.lon],{draggable:true,zIndexOffset:900,title:"Перетащите, чтобы уточнить место",icon:L.divIcon({className:"youpin",html:"<i></i>",iconSize:[34,34],iconAnchor:[17,17]})});
-      um.on("dragend",()=>{ const ll=um.getLatLng(); S.user={lat:ll.lat,lon:ll.lng,acc:0,manual:true}; S.locWarn=null; const before=S.stop; autoPickStop(); renderTop(); renderSheet(); drawMap(before!==S.stop?{fit:"local"}:{}); });
-      MAP.g.user.addLayer(um);
-    }else{
-      MAP.g.user.addLayer(L.circle([S.user.lat,S.user.lon],{radius:Math.max(8,Math.min(S.user.acc||0,800)),color:you,weight:1,opacity:.5,fillColor:you,fillOpacity:.12,interactive:false}));
-      MAP.g.user.addLayer(L.circleMarker([S.user.lat,S.user.lon],{radius:9,color:"#fff",weight:3,fillColor:you,fillOpacity:1,interactive:false}));
-    }
+    MAP.g.user.addLayer(L.circle([S.user.lat,S.user.lon],{radius:Math.max(8,Math.min(S.user.acc||0,800)),color:you,weight:1,opacity:.5,fillColor:you,fillOpacity:.12,interactive:false}));
+    if(S.user.manual){ const pm=L.marker([S.user.lat,S.user.lon],{draggable:true,icon:L.divIcon({className:"youpin",html:"<i></i>",iconSize:[26,26],iconAnchor:[13,36]}),zIndexOffset:2000,title:"Перетащите пин"});
+      pm.on("dragend",e=>{ const p=e.target.getLatLng(); setManual({lat:p.lat,lng:p.lng},true); }); MAP.g.user.addLayer(pm); }
+    else MAP.g.user.addLayer(L.circleMarker([S.user.lat,S.user.lon],{radius:9,color:"#fff",weight:3,fillColor:you,fillOpacity:1,interactive:false}));
     if(!EDIT && hasXY(st) && S.locWarn!=="far") MAP.g.walk.addLayer(L.polyline([[S.user.lat,S.user.lon],[st.lat,st.lon]],{color:mute,weight:3,dashArray:"2 8",lineCap:"round",interactive:false}));
-  }
-  /* переход дороги к соседней остановке */
-  if(!EDIT && sel && sel.board!==S.stop){
-    const bs=stopByName[sel.board];
-    if(hasXY(st)&&hasXY(bs)) MAP.g.walk.addLayer(L.polyline([[st.lat,st.lon],[bs.lat,bs.lon]],{color:mute,weight:4,dashArray:"2 7",lineCap:"round",interactive:false}));
   }
   /* вид */
   if(opts.fit==="local"){
@@ -742,7 +675,10 @@ function drawMap(opts={}){
     MAP.fit(pts,17);
   }else if(opts.fit==="route"){
     const pts=routePts.slice(); if(S.user&&S.locWarn!=="far") pts.push([S.user.lat,S.user.lon]);
-    MAP.fit(pts.length?pts:[],15);
+    if(opts.soft&&pts.length&&MAP.ready){ const q=MAP.pad(),sz=MAP.map.getSize();
+      const vis=ll=>{ const c=MAP.map.latLngToContainerPoint(ll); return c.x>=q.tl[0]&&c.y>=q.tl[1]&&c.x<=sz.x-q.br[0]&&c.y<=sz.y-q.br[1]; };
+      if(pts.every(vis)) return; }
+    MAP.fit(pts.length?pts:[],opts.soft&&MAP.ready?Math.min(15,MAP.map.getZoom()):15);
   }else if(opts.fit==="all"){
     const pts=D.stops.filter(hasXY).map(s=>[s.lat,s.lon]); MAP.fit(pts,13);
   }
@@ -757,15 +693,15 @@ function refreshAll(fit){
 }
 function setDest(d){
   if(S.dest===d) return;
-  S.dest=d; store.set("bus.dest",d); S.ride=null;
+  S.dest=d; store.set("bus.dest",d); S.ride=null; if(S.stop&&!DESTS.includes(S.stop)) S.stop=resolveStop(S.stop);
   if(S.stop===d){ S.stop=null; S.stopManual=false; }
   autoPickStop(); renderTop(); renderSheet(); drawMap({fit:"local"});
 }
 function selectStop(name,fromMap){
   if(!stopByName[name]) return;
   if(DESTS.includes(name) && name===S.dest) return;
+  name=resolveStop(name);
   S.stop=name; S.stopManual=true; S.ride=null; store.set("bus.stop",name); store.set("bus.stopManual",true);
-  S.showAll=false; renderTop();
   if(fromMap && S.sheet==="peek") setSheet("half");
   renderSheet(); drawMap({fit:"local"}); $("sheetBody").scrollTop=0;
 }
@@ -777,28 +713,26 @@ document.addEventListener("click",e=>{
   switch(act){
     case "tab": setTab(v); break;
     case "dest": setDest(v); break;
-    case "dir": if(S.dir!==v){ S.dir=v; S.ride=null; if(S.stop&&!S.stopManual) autoPickStop(); renderSheet(); drawMap({fit:"local"}); } break;
+    case "dir": case "swap": { const nv=act==="swap"?(S.dir==="to"?"from":"to"):v; if(S.dir!==nv){ S.dir=nv; S.ride=null; if(S.stop&&!DESTS.includes(S.stop)) S.stop=resolveStop(S.stop); if(S.stop&&!S.stopManual) autoPickStop(); renderTop(); renderSheet(); drawMap({fit:"local"}); } break; }
+    case "toggle-dest": setDest(S.dest===ENT?RC:ENT); break;
+    case "zoom": if(MAP.ready){ +v>0?MAP.map.zoomIn(1):MAP.map.zoomOut(1); } break;
+    case "locate-close": closeModal(); setTab("map"); startLocate(); break;
+    case "manual-close": closeModal(); startManual(); break;
     case "mode": S.mode=v; store.set("bus.mode",v); renderSheet(); break;
-    case "ride": S.ride=+el.dataset.i; renderSheet(); drawMap({fit:"route"}); $("sheetBody").scrollTop=0; break;
+    case "ride": S.ride=+el.dataset.i; renderSheet(); drawMap({fit:"route",soft:true}); $("sheetBody").scrollTop=0; break;
     case "grab": if(!desktop()) setSheet(S.sheet==="peek"?"half":S.sheet==="half"?"full":"half"); break;
     case "pick-stop": openStopPicker(); break;
-    case "pick-locate": closeModal(); S.stopManual=false; store.set("bus.stopManual",false); setTab("map"); startLocate(); break;
-    case "pick-manual": closeModal(); startManual(); break;
-    case "addr-search": searchAddress($("stopQ").value); break;
-    case "addr-pick": { const a=ADDR_RES[+el.dataset.i]; if(a){ closeModal(); setTab("map"); setManual({lat:a.lat,lng:a.lon}); } break; }
     case "pick": { const x=PICK_LIST[+el.dataset.i]; if(x){ closeModal(); selectStop(x.n); if(S.sheet==="peek") setSheet("half"); } break; }
     case "nearest": { const n=nearestStop(); if(n){ S.stopManual=false; store.set("bus.stopManual",false); S.stop=n.name; S.ride=null; store.set("bus.stop",n.name); renderSheet(); drawMap({fit:"local"}); } break; }
     case "locate": setTab("map"); startLocate(); break;
     case "manual": startManual(); break;
-    case "fit-route": drawMap({fit:"route"}); break;
-    case "show-all": S.showAll=!S.showAll; renderTop(); drawMap(); toast(S.showAll?"Показаны все остановки":"Показан только маршрут",1600); break;
     case "open-when": openWhen(); break;
     case "when-day": $("wDate").value=v; break;
     case "when-apply": applyWhen(); break;
-    case "when-now": S.when=null; S.ride=null; S.schedDay=null; closeModal(); refreshAll(true); break;
+    case "when-now": S.when=null; S.ride=null; closeModal(); refreshAll(true); break;
     case "close-modal": closeModal(); break;
     case "theme": S.theme=S.theme==="auto"?"light":S.theme==="light"?"dark":"auto"; store.set("bus.theme",S.theme); applyTheme(); toast("Тема: "+({auto:"как в системе",light:"светлая",dark:"тёмная"})[S.theme],1800); break;
-    case "scity": S.schedCity=v; renderSchedHead(); renderSchedList(); break;
+    case "sroute": S.schedRoute=v; renderSchedHead(); renderSchedList(); break;
     case "sday": S.schedDay=v||null; renderSchedHead(); renderSchedList(); break;
     case "trip": { const id=el.dataset.id; S.open.has(id)?S.open.delete(id):S.open.add(id); renderSchedList(); break; }
     case "goto-stop": {
@@ -905,6 +839,7 @@ if(!EDIT && navigator.permissions && navigator.permissions.query){
     else if(p.state==="denied"){ S.locErr="denied"; renderSheet(); }
   }).catch(()=>{});
 }
+document.addEventListener("toggle",e=>{ const d=e.target; if(d&&d.matches&&d.matches("details.path")) S.pathOpen=d.open?d.dataset.pk:null; },true);
 function softRender(){
   const b=$("sheetBody"), top=b.scrollTop, det=b.querySelector("details.path"), wasOpen=det&&det.open;
   renderSheet(); b.scrollTop=top; const d2=b.querySelector("details.path"); if(d2&&wasOpen) d2.open=true;

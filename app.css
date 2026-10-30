@@ -113,9 +113,6 @@ button svg{width:22px;height:22px}
 .titlebtn h2{font-size:21px;font-weight:800;line-height:1.15;letter-spacing:-.01em}
 .titlebtn small{display:block;color:var(--mute);font-size:14px;margin-top:2px}
 .titlebtn svg{flex:none;width:22px;height:22px;color:var(--mute)}
-.titlebtn small.lab{margin:0 0 1px;font:800 11.5px/1 var(--head);letter-spacing:.08em;text-transform:uppercase;color:var(--acc-text)}
-.titlebtn .chg{flex:none;display:flex;align-items:center;gap:6px;height:40px;padding:0 14px;border-radius:20px;background:var(--acc-soft);color:var(--acc-text);font:800 14.5px/1 var(--head)}
-.titlebtn .chg svg{width:18px;height:18px;color:inherit}
 .peekline{display:none;margin-top:6px;align-items:center;gap:10px;font:700 15px/1.2 var(--head)}
 .sheet[data-state="peek"] .peekline{display:flex}
 .sheet[data-state="peek"] .body{display:none}
@@ -157,9 +154,6 @@ button svg{width:22px;height:22px}
 .ico.xfer{background:var(--raised);color:var(--ink)}
 .node h3{font-size:18px;font-weight:800;line-height:1.2;margin-top:3px}
 .node .sub{color:var(--mute);font-size:14px;margin-top:2px}
-.cross{display:flex;gap:8px;align-items:flex-start;margin:8px 0 2px;padding:9px 12px;border-radius:14px;background:var(--acc-soft);color:var(--acc-text);font:700 14px/1.3 var(--head)}
-.cross svg{flex:none;width:20px;height:20px;margin-top:1px}
-.rchip .x{margin-left:4px;font-size:13px;color:var(--acc-text)}
 .leg{margin:2px 0 4px}
 .leg .seg{max-width:340px;padding:3px}
 .leg .seg button{height:40px;font-size:15px}
@@ -207,8 +201,6 @@ details.path[open] summary::after{transform:rotate(225deg)}
 .hscroll::-webkit-scrollbar{display:none}
 .chip{flex:none;height:40px;padding:0 16px;border-radius:20px;background:var(--card);font:800 15px/1 var(--head);color:var(--ink);display:flex;align-items:center}
 .chip[aria-pressed="true"]{background:var(--acc);color:var(--acc-ink)}
-.chip svg{width:18px;height:18px;margin-right:6px;color:var(--acc-text)}
-.chip.when.on{outline:2px solid var(--acc)}
 .search{display:flex;align-items:center;gap:10px;height:48px;padding:0 14px;border-radius:16px;background:var(--card);margin-top:8px}
 .search svg{width:20px;height:20px;color:var(--mute);flex:none}
 .search input{flex:1;min-width:0;border:0;background:none;outline:none;font-size:16px;height:100%}
@@ -257,15 +249,7 @@ details.path[open] summary::after{transform:rotate(225deg)}
 .field input:focus{border-color:var(--acc);outline:none}
 .quick{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
 .mbody .chip{background:var(--raised)}
-.lbl2{margin:14px 2px 2px;font:800 12.5px/1 var(--head);letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
-.pickact{margin:0 0 4px}
-.pickact .btn{min-height:48px;font-size:15px}
 .stoplist{list-style:none;margin:8px 0 0;padding:0}
-.stoplist .addrrow{display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;font:700 16px/1.25 var(--head);color:var(--acc-text)}
-.stoplist .addrrow svg{flex:none;width:22px;height:22px}
-.modal.drawer .mcard{height:min(88dvh,760px);max-height:88dvh}
-.modal.drawer .mbody{flex:1;min-height:0}
-.modal.drawer{background:rgba(5,10,20,.4)}
 .stoplist li>button{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;width:100%;min-height:58px;padding:8px 2px;border-bottom:1px solid var(--line)}
 .stoplist .n{font:700 16px/1.25 var(--head)}
 .stoplist .d{font:800 14px/1 var(--head);color:var(--acc-text)}
@@ -279,7 +263,6 @@ details.path[open] summary::after{transform:rotate(225deg)}
 .pin.sel span{box-shadow:0 0 0 5px var(--acc-soft),0 2px 10px rgba(0,0,0,.3)}
 .leaflet-tooltip.lbl{background:var(--card);color:var(--ink);border:0;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.3);font:700 13px/1.2 var(--head);padding:5px 9px;white-space:nowrap}
 .leaflet-tooltip.lbl::before{display:none}
-.youpin i{display:block;width:34px;height:34px;border-radius:50%;background:var(--you);border:4px solid #fff;box-shadow:0 0 0 8px rgba(47,111,237,.22),0 2px 10px rgba(0,0,0,.35);cursor:grab}
 .editdot i{display:block;width:22px;height:22px;border-radius:50%;background:var(--acc);border:3px solid var(--card);box-shadow:0 0 0 1px var(--ink)}
 .toast{position:fixed;left:50%;bottom:calc(var(--tabh) + 20px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:3000;
   background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:16px;font:600 14.5px/1.3 var(--body);max-width:min(92vw,440px);text-align:center}
@@ -304,10 +287,21 @@ details.path[open] summary::after{transform:rotate(225deg)}
   .toast{left:calc(50% + 220px);bottom:24px}
   .mcard{border-radius:26px;margin-bottom:5vh;align-self:center}
   .modal{align-items:center}
-  .modal.drawer{align-items:flex-end;justify-content:flex-start;background:rgba(5,10,20,.25)}
-  .modal.drawer .mcard{width:440px;max-width:440px;border-radius:26px 26px 0 0;margin:0;align-self:flex-end;height:calc(100dvh - 60px);max-height:calc(100dvh - 60px)}
   .sched-in{padding-bottom:40px;margin-left:470px;max-width:none;margin-right:24px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 .stline .sn{display:inline-block;min-width:20px;margin-right:8px;padding:1px 5px;border-radius:10px;background:var(--acc-text,#2a6df4);color:#fff;font:700 12px/16px Roboto,sans-serif;text-align:center;vertical-align:1px}
+
+/* переключатель «Моё местоположение ⇄ Завод», зум, пин */
+.rbar{display:flex;align-items:center;flex:1;min-width:0;background:var(--card);border-radius:16px;padding:4px;gap:2px;box-shadow:0 2px 12px rgba(0,0,0,.22)}
+.rbar .ep{flex:1;min-width:0;height:50px;border-radius:12px;display:flex;align-items:center;gap:8px;padding:0 10px;text-align:left;font:800 14px/1.2 var(--head);color:var(--ink);background:var(--raised)}
+.rbar .ep span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rbar .ep small{display:block;font:600 11px/1.2 var(--head);color:var(--mute)}
+.rbar .ep svg{width:20px;height:20px;flex:none;color:var(--acc)}
+.rbar .sw{width:40px;height:40px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--acc)}
+.rbar .sw svg{width:22px;height:22px}
+.fab.sm{width:48px;height:48px;font:600 26px/1 var(--head);padding-bottom:3px}
+.leaflet-control-zoom{display:none!important}
+.youpin i{display:block;width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--you);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45)}
+.leaflet-marker-draggable{cursor:grab}
