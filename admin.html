@@ -63,7 +63,7 @@ tr.dragging{opacity:.3}tr.over-up>td{border-top:3px solid var(--acc)}tr.over-dn>
 tr.st.dim{opacity:.8}tr.st.hl>td{background:var(--acc-soft)}tr.st.hl>td:first-child,tr.leg.cur>td{border-left:3px solid var(--acc)}
 tr.leg td{font-size:12px;padding:3px 8px 3px 40px;cursor:pointer;color:var(--mute)}tr.leg.miss td{color:#dc2626;font-weight:700}tr.leg.flag td{color:var(--warn);font-weight:700}tr.leg.cur td{background:var(--warn-bg);color:var(--warn);font-weight:700}
 .tg{display:inline-block;font:700 11px/16px var(--head);padding:0 7px;border-radius:9px;margin-bottom:2px;background:var(--card);color:var(--acc-text);border:1px solid var(--acc)}
-.tw{font-size:11px;color:var(--acc-text);margin:2px 0 0 2px}.hint{font-size:12px;color:var(--mute);margin:0 0 6px}
+tr.pick>td{box-shadow:inset 0 2px 0 var(--acc),inset 0 -2px 0 var(--acc);background:var(--acc-soft)}.pickm{filter:hue-rotate(150deg) saturate(2.2) drop-shadow(0 0 7px var(--acc))}.tw{font-size:11px;color:var(--acc-text);margin:2px 0 0 2px}.hint{font-size:12px;color:var(--mute);margin:0 0 6px}
 .bar{position:sticky;bottom:0;display:flex;gap:8px;flex-wrap:wrap;margin:10px -12px -12px;padding:10px 12px;background:var(--card);border-top:1px solid var(--line);box-shadow:0 -3px 8px #0000000f}
 .okb{border-color:var(--acc);color:var(--acc-text);background:var(--acc-soft)}
 .via{background:#7c3aed;border:2px solid #fff;border-radius:50%;box-shadow:0 0 3px #0008;color:#fff;font:700 11px/18px system-ui;text-align:center;cursor:pointer}
@@ -88,7 +88,7 @@ const KEY="busadmin.v1";
 let D=JSON.parse(JSON.stringify(window.BUS_DATA));D.geom=D.geom||{};D.via=D.via||{};
 try{const d=JSON.parse(localStorage.getItem(KEY)||"null");if(d&&d.trips)D=d}catch(e){}
 D.okLegs=D.okLegs||[];
-let ti=0,sel=null,showAll=false,place=null,onlyOne=false;
+let ti=0,sel=null,showAll=false,place=null,onlyOne=false,selStop=null;
 const cv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const stop=n=>D.stops.find(s=>s.name===n),has=s=>s&&s.lat!=null,pk=(a,b)=>a+"→"+b;
@@ -127,7 +127,7 @@ function draw(fit){
     .on("click",()=>{D.via[sel].splice(i,1);save();render();draw();say("Точка убрана")}).addTo(lg));
   (showAll?D.stops.map(s=>s.name):[...new Set(ns)]).forEach(n=>{const s=stop(n);if(!has(s))return;pts.push([s.lat,s.lon]);const i=ns.indexOf(n);
     const tag=n===sa[0]?"▶ НАЧАЛО: ":n===sa[1]?"■ КОНЕЦ: ":"";
-    L.marker([s.lat,s.lon],{draggable:true,title:n,zIndexOffset:n===sa[0]||n===sa[1]?800:0}).bindTooltip(tag+(i>=0?(i+1)+". ":"")+n,{permanent:i>=0&&!showAll||!!tag,direction:"right",offset:[8,-18]})
+    L.marker([s.lat,s.lon],{draggable:true,title:n,zIndexOffset:n===sa[0]||n===sa[1]?800:0}).bindTooltip(tag+(i>=0?(i+1)+". ":"")+n,{permanent:i>=0&&!showAll||!!tag,direction:"right",offset:[8,-18]}).on("click",()=>{selStop=n;render();draw()}).on("add",e=>{if(n===selStop&&e.target._icon)e.target._icon.classList.add("pickm")})
     .on("dragend",e=>{const p=e.target.getLatLng();if(s.hub){if(!confirm("«"+n+"» — узловая остановка, общая для всех маршрутов. Сдвинуть её? Линии других рейсов останутся как есть."))return draw();s.lat=+p.lat.toFixed(6);s.lon=+p.lng.toFixed(6);save();say("Узловая остановка сдвинута, линии не сброшены");render();return draw()}s.lat=+p.lat.toFixed(6);s.lon=+p.lng.toFixed(6);
       Object.keys(D.geom).filter(k=>k.split("→").includes(n)).forEach(k=>{delete D.geom[k];unok(k)});save();say("Остановка сдвинута, её линии сброшены — нажмите «Построить по дорогам»");render();draw()}).addTo(lg)});
   if(fit&&pts.length)map.fitBounds(pts,{padding:[50,50]});
@@ -144,7 +144,7 @@ function render(){
   const opts=D.stops.map(s=>s.name).sort((a,b)=>a.localeCompare(b,"ru"));
   let rows="";ns.forEach((s,i)=>{
     const tg=(hs.has(i)?'<span class="tg s">начало участка</span> ':"")+(he.has(i)?'<span class="tg e">конец участка</span>':"");
-    rows+=`<tr class="st ${hs.has(i)||he.has(i)?"hl":sel?"dim":""}" data-i="${i}"><td><span class="dh" draggable="true" data-i="${i}" title="Потяните, чтобы переставить остановку">⠿</span></td>
+    rows+=`<tr class="st ${hs.has(i)||he.has(i)?"hl":sel?"dim":""} ${s.stop===selStop?"pick":""}" data-i="${i}"><td><span class="dh" draggable="true" data-i="${i}" title="Потяните, чтобы переставить остановку">⠿</span></td>
     <td><input class="tm" data-i="${i}" value="${s.time||""}" placeholder="по треб." title="Время ЧЧ:ММ. Пусто — «при наличии пассажиров»"></td>
     <td class="sc">${tg}<div class="sr"><input class="sn" list="stl" data-i="${i}" value="${esc(s.stop)}" placeholder="Начните вводить название" title="Нажмите и начните вводить название — список отфильтруется"><button class="hb ${isHub(s.stop)?"on":""}" data-a="hub" data-i="${i}" title="⚓ Узловая остановка (МПЗ, РЦ): общая для всех маршрутов, автобус подъезжает и уезжает с любой стороны без петель">⚓</button></div>${twNames(s.stop).length?`<div class="tw">⇄ пара: ${twNames(s.stop).map(esc).join(", ")}</div>`:""}</td>
     <td class="acts"><button data-a="up" data-i="${i}" title="Выше">↑</button><button data-a="dn" data-i="${i}" title="Ниже">↓</button><button data-a="ins" data-i="${i}" title="Добавить остановку после этой">＋</button><button data-a="del" data-i="${i}" title="Удалить">✕</button></td></tr>`;
@@ -158,7 +158,7 @@ function render(){
   <div class="box ${miss.length||noxy.length?"warn":""}">${miss.length?`Участков без линии по дороге: <b>${miss.length}</b> (красный пунктир на карте). `:"Все участки построены по дорогам ✓ "}${fl.length?`<br>Проверьте участки с возможным крюком: <b>${fl.length}</b>. `:""}${noxy.length?`<br>Нет места на карте: ${noxy.map(esc).join(", ")} — кликните по карте. `:""}
     <p style="margin:6px 0 0"><label><input type="checkbox" id="sa" ${showAll?"checked":""}> показать все остановки</label></p></div>
   ${legBox}<datalist id="stl">${opts.map(o=>`<option value="${esc(o)}">`).join("")}</datalist><p class="hint">Остановку ищут вводом названия прямо в строке. Переставляйте остановки, потянув за ⠿.</p><table>${rows}</table><div class="bar"><button data-a="bt" class="pri">${miss.length?"Построить по дорогам недостающие":"Перестроить весь рейс"}</button>${sel?`<button data-a="bl">Построить участок ${ks.indexOf(sel)+1}</button>`:""}${sel&&rawSus(sel)?(D.okLegs.includes(sel)?`<button data-a="unok">Снять подтверждение крюка</button>`:`<button data-a="ok" class="okb">✓ Крюк верный — подтвердить</button>`):""}</div></div>`;
-  const cu=document.querySelector("tr.leg.cur");if(cu)cu.scrollIntoView({block:"nearest"});
+  const cu=document.querySelector("tr.leg.cur");const pk2=document.querySelector("tr.pick")||cu;if(pk2)pk2.scrollIntoView({block:"nearest"});
 }
 function touch(){const t=D.trips[ti],tt=t.stops.filter(s=>s.time);if(sel&&!legs(t).includes(sel))sel=null;t.start=tt.length?tt[0].time:t.start;t.end=tt.length?tt[tt.length-1].time:t.end;save();render();draw()}
 
