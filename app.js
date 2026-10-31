@@ -17,6 +17,8 @@ const TO_LABEL = {[ENT]:"До завода", [RC]:"До РЦ"};
 const stopByName = Object.fromEntries(D.stops.map(s=>[s.name,s]));
 const STOP_IDX = Object.fromEntries(D.stops.map((s,i)=>[s.name,i]));
 const lab=n=>String(n||"").replace(/\s*\((?:остановка\s+)?(?:"[^"]*"\s+)?(?:в сторону|со стороны)[^()]*\)/gi,"").replace(/\s+в сторону [^()]*\)/gi,")").trim();
+const CITIES=["Ногинск","Электросталь","Электроугли","Кудиново","Монино","Лосино-Петровский"];
+const tripHasCity=(t,c)=>t.stops.some(s=>lab(s.stop).replace(/\([^)]*\)/g,"").toLowerCase().includes(c.toLowerCase()));
 const TW={};D.stops.forEach(s=>{if(s.twin!=null)(TW[s.twin]=TW[s.twin]||[]).push(s.name)});
 const twinsOf=n=>{const s=stopByName[n];return s&&s.twin!=null?TW[s.twin]:[n]};
 const ROUTES = [...new Set(D.trips.map(t=>t.route))].sort();
@@ -183,7 +185,27 @@ function upcomingPlan(){
 /* ---------- расстояния и время в пути до остановки ---------- */
 const walkMin = m => Math.max(1,Math.round(m*1.25/80));
 const carMin  = m => Math.max(1,Math.round(m*1.35/450));
-function distToStop(){ const s=S.stop&&stopByName[S.stop]; return (S.user&&hasXY(s)) ? haversine(S.user,s) : null; }
+function distToStop(){ const s=S.stop&&stopByName[S.stop]; if(!(S.user&&hasXY(s))) return null; const d=haversine(S.user,s); return S.mode==="walk"?wm(S.stop,d).m:d; }
+/* Пешеходный маршрутизатор (OSRM, профиль foot): настоящая длина пути до остановок. Если сервис недоступен — оценка по прямой. */
+const WALK={key:"",m:{},busy:false};
+const wKey=()=>S.user?S.user.lat.toFixed(4)+","+S.user.lon.toFixed(4):"";
+function wm(n,d){ const w=WALK.key===wKey()?WALK.m[n]:null; return w?{min:Math.max(1,Math.ceil(w.s/60)),m:w.d}:{min:walkMin(d),m:d}; }
+function walkCands(){
+  if(!S.user) return [];
+  const out=[]; for(const n of SERVED[S.dest][S.dir]){ const s=stopByName[n]; if(!hasXY(s)||DESTS.includes(n)) continue; out.push({name:n,d:haversine(S.user,s)}); }
+  out.sort((a,b)=>a.d-b.d);
+  const cand=out.filter(x=>x.d<=4000); return (cand.length>=3?cand:out.slice(0,3)).slice(0,12);
+}
+async function refineWalk(){
+  if(!S.user||S.mode!=="walk"||WALK.busy||WALK.key===wKey()) return;
+  const key=wKey(), cs=walkCands(); if(!cs.length) return; WALK.busy=true;
+  const base=((window.BUS_CONFIG&&BUS_CONFIG.footRouter)||"https://routing.openstreetmap.de/routed-foot").replace(/\/$/,"");
+  const pts=[[S.user.lon,S.user.lat],...cs.map(x=>{const t=stopByName[x.name]; return [t.lon,t.lat];})], m={};
+  try{ const j=await(await fetch(`${base}/table/v1/foot/${pts.map(q=>q.join(",")).join(";")}?sources=0&annotations=duration,distance`)).json();
+    if(j.code==="Ok") cs.forEach((x,i)=>{ const t=j.durations[0][i+1], d=j.distances&&j.distances[0][i+1]; if(t!=null) m[x.name]={s:t,d:d!=null?d:x.d}; }); }catch(e){}
+  WALK.busy=false; if(key!==wKey()) return refineWalk();
+  WALK.key=key; WALK.m=m; autoPickStop(); renderTop(); renderSheet(); drawMap({fit:null});
+}
 /* парные остановки (по разные стороны дороги): берём ту, у которой есть рейсы в нужную сторону */
 function resolveStop(n){
   const g=twinsOf(n); if(g.length<2) return n;
@@ -201,28 +223,25 @@ function nearestStop(){
 }
 /* Подбор остановки: среди остановок в пешей доступности берём ту, с которой быстрее доехать (с учётом ходьбы) */
 function scoreStop(n,d){
-  const c=ctx(), w=walkMin(d)+1;
+  const c=ctx(), w=(S.mode==="walk"?wm(n,d).min:carMin(d))+1;
   for(let off=0;off<8;off++){
     const date=new Date(c.date.getFullYear(),c.date.getMonth(),c.date.getDate()+off);
     let rides=planDay(n,S.dir,S.dest,dkOf(date));
     if(off===0) rides=rides.filter(r=>rideEnd(r)>=c.min && (S.dir!=="to"||!r.dep||toMin(r.dep)-w>=c.min));
     if(rides.length){ const r=rides[0], a=r.arr?toMin(r.arr):(r.dep?toMin(r.dep)+30:toMin(r.trip.end));
-      return off*1440+a+(S.dir==="to"?0:w); }
+      return off*1440+a+(S.dir==="to"?.35*w:w); }
   }
   return 1e9;
 }
 function bestStop(){
-  if(!S.user) return null;
-  const out=[]; for(const n of SERVED[S.dest][S.dir]){ const s=stopByName[n]; if(!hasXY(s)||DESTS.includes(n)) continue; out.push({name:n,d:haversine(S.user,s)}); }
-  out.sort((a,b)=>a.d-b.d);
-  let cand=out.filter(x=>x.d<=1600); if(!cand.length) cand=out.slice(0,3);
-  let best=null; for(const x of cand.slice(0,8)){ x.sc=scoreStop(x.name,x.d)+x.d/2000; if(!best||x.sc<best.sc) best=x; }
+  let best=null; for(const x of walkCands()){ x.sc=scoreStop(x.name,x.d); if(!best||x.sc<best.sc) best=x; }
   return best;
 }
 function autoPickStop(){
   if(S.stopManual || !S.user || S.locWarn==="far") return;
   const n=bestStop();
   if(n && n.name!==S.stop){ S.stop=n.name; S.ride=null; store.set("bus.stop",S.stop); }
+  refineWalk();
 }
 function plantNote(){
   const t=stopByName[S.dest]; if(!S.user||!hasXY(t)||S.locWarn==="far") return "";
@@ -250,7 +269,7 @@ function renderSheet(){
     let peek="";
     if(sel){
       const cd = (!plan.c.planned && plan.offset===0 && sel.dep) ? " · через "+human(toMin(sel.dep)-plan.c.min) : "";
-      peek=`<div class="peekline"><span class="badge b${sel.trip.route}">${sel.trip.route}</span><span>${sel.dep?sel.dep:"по требованию"}${plan.offset>0?" · "+dayWord(plan.date,plan.c.today):""}${esc(cd)}</span></div>`;
+      peek=`<div class="peekline"><span>${sel.dep?sel.dep:"по требованию"}${plan.offset>0?" · "+dayWord(plan.date,plan.c.today):""}${esc(cd)}</span><span class="badge b${sel.trip.route}">${sel.trip.route}</span></div>`;
     }else peek=`<div class="peekline mute">Рейсов нет</div>`;
     head.innerHTML=`<button class="titlebtn" type="button" data-act="pick-stop"><span class="t"><h2>${esc(lab(S.stop))}</h2><small>${sub}</small></span>${svg("chev")}</button>${peek}${plantNote()}`;
   }
@@ -385,7 +404,7 @@ function renderTop(){
   const chip=$("whenChip");
   chip.innerHTML=svg("clock")+esc(whenLabel());
   chip.classList.toggle("on",!!S.when);
-  $("fabs").innerHTML=`${S.pinMode?`<button class="fab ok" type="button" data-act="pin-done">Готово</button>`:""}<button class="fab sm" type="button" data-act="zoom" data-v="1" aria-label="Приблизить">+</button>
+  $("fabs").innerHTML=`<button class="fab sm" type="button" data-act="zoom" data-v="1" aria-label="Приблизить">+</button>
     <button class="fab sm" type="button" data-act="zoom" data-v="-1" aria-label="Отдалить">−</button>
     <button class="fab${S.user&&!S.user.manual?" on":""}" type="button" data-act="locate" aria-label="Где я" title="Где я">${svg("plane")}</button>`;
   $("tabMap").innerHTML=svg("map")+"Карта";
@@ -408,33 +427,31 @@ function setTab(t){
 function schedDay(){ return S.schedDay || dkOf(ctx().date); }
 function renderSchedHead(){
   const c=ctx(), dl=dateLabel(c.date);
-  const chips = ["all",...ROUTES].map(r=>`<button class="chip" type="button" data-act="sroute" data-v="${r}" aria-pressed="${S.schedRoute===r}">${r==="all"?"Все":r}</button>`).join("");
+  const chips = ["all",...CITIES].map(r=>`<button class="chip" type="button" data-act="sroute" data-v="${r}" aria-pressed="${(CITIES.includes(S.schedRoute)?S.schedRoute:"all")===r}">${r==="all"?"Все":r}</button>`).join("");
   const days = [[null,dl.replace(/^./,x=>x.toUpperCase())],["work","Будни, вс"],["sat","Суббота"]].map(([k,l])=>`<button class="chip" type="button" data-act="sday" data-v="${k||""}" aria-pressed="${S.schedDay===k}">${l}</button>`).join("");
   $("schedHead").innerHTML=`<div class="row"><h1>Расписание</h1>
     <button class="whenchip${S.when?" on":""}" type="button" data-act="open-when">${svg("clock")}${esc(whenLabel())}</button>
     <button class="iconbtn" type="button" data-act="theme" aria-label="Тема оформления" title="Тема: ${({auto:"как в системе",light:"светлая",dark:"тёмная"})[S.theme]}">${svg("theme")}</button></div>
-    <div class="hscroll" role="group" aria-label="Маршрут">${chips}</div>
+    <div class="hscroll" role="group" aria-label="Город">${chips}</div>
     <div class="hscroll" role="group" aria-label="День" style="padding-top:2px">${days}</div>
     <label class="search">${svg("search")}<input id="schedQ" type="search" placeholder="Найти остановку" value="${esc(S.q)}" autocomplete="off"></label>`;
 }
 function renderSchedList(){
   const dk=schedDay(), c=ctx(), q=S.q.trim().toLowerCase();
   const live = !S.schedDay && sameDay(c.date,c.today);
-  let trips=tripsFor(dk).filter(t=>S.schedRoute==="all"||t.route===S.schedRoute);
+  let trips=tripsFor(dk).filter(t=>!CITIES.includes(S.schedRoute)||tripHasCity(t,S.schedRoute));
   if(q) trips=trips.filter(t=>t.stops.some(s=>s.stop.toLowerCase().includes(q)));
   const label = S.schedDay ? (dk==="sat"?"по субботам":"в будни и воскресенье") : dateLabel(c.date)+(dk==="sat"?" (суббота)":"");
   let html=`<div class="dayline">Рейсы ${esc(label)}</div>`;
   if(!trips.length) html+=`<div class="empty">Ничего не найдено. Измените маршрут, день или поиск.</div>`;
-  const routes=[...new Set(trips.map(t=>t.route))];
-  for(const r of routes){
-    const ts=trips.filter(t=>t.route===r).sort((a,b)=>toMin(a.start)-toMin(b.start));
-    html+=`<div class="rgroup"><span class="badge b${r}">${r}</span><span>${ts.length} ${ts.length===1?"рейс":ts.length<5?"рейса":"рейсов"}</span></div>`;
+  {
+    const ts=trips.slice().sort((a,b)=>toMin(a.start)-toMin(b.start));
     for(const t of ts){
       const open=S.open.has(t.id) || (q&&ts.length<=3);
       const past = live && toMin(t.end)<c.min;
       const n=t.stops.filter(s=>s.stop!==ENT).length;
       html+=`<div class="trip${open?" open":""}${past?" past":""}"><button type="button" data-act="trip" data-id="${t.id}" aria-expanded="${open}">
-        <span><span class="tt">${t.start} – ${t.end}</span><span class="ts"><span>${t.part==="morning"?"Утро":"Вечер"}</span>${t.rc?`<span class="pill">для сотрудников РЦ</span>`:""}<span>${n} ${n===1?"остановка":n<5?"остановки":"остановок"}</span></span></span>
+        <span><span class="tt">${t.start} – ${t.end}</span><span class="ts"><span>${t.part==="morning"?"Утро":"Вечер"}</span><span class="mute">рейс ${t.route}</span>${t.rc?`<span class="pill">для сотрудников РЦ</span>`:""}<span>${n} ${n===1?"остановка":n<5?"остановки":"остановок"}</span></span></span>
         <span class="chev">${svg("chev")}</span></button>`;
       if(open){
         html+=`<div class="tbody"><ol class="stline">${t.stops.map(s=>{
@@ -537,13 +554,15 @@ document.addEventListener("visibilitychange",()=>{
 /* пин стоит по центру карты: двигаете карту — двигается и точка «я здесь» */
 function pinPoint(){ const q=MAP.pad(),sz=MAP.map.getSize(); return [(q.tl[0]+sz.x-q.br[0])/2,(q.tl[1]+sz.y-q.br[1])/2]; }
 function placePin(){
+  let pb=$("pinbar"); if(!pb&&S.pinMode){ pb=document.createElement("button"); pb.id="pinbar"; pb.type="button"; pb.className="pinbar"; pb.dataset.act="pin-done"; pb.textContent="Выбрать"; $("mapView").appendChild(pb); }
+  if(pb) pb.hidden=!S.pinMode; $("mapView").classList.toggle("pinmode",!!S.pinMode);
   let cp=$("cpin"); if(!cp){ if(!S.pinMode||!MAP.ready) return; cp=document.createElement("div"); cp.id="cpin"; cp.className="cpin"; cp.innerHTML="<i></i>"; $("map").appendChild(cp); }
   cp.hidden=!S.pinMode; if(!S.pinMode||!MAP.ready) return;
   const [x,y]=pinPoint(); cp.style.left=x+"px"; cp.style.top=y+"px";
 }
 function pinSync(){ const ll=MAP.map.containerPointToLatLng(pinPoint()); setManual({lat:ll.lat,lng:ll.lng},true); }
 function startManual(){
-  stopWatch(); setTab("map"); setSheet("half"); S.pinMode=false;
+  stopWatch(); setTab("map"); setSheet("peek"); S.pinMode=false;
   const c=S.user?{lat:S.user.lat,lng:S.user.lon}:(MAP.ready?MAP.map.getCenter():{lat:regionCenter().lat,lng:regionCenter().lon});
   setManual({lat:c.lat,lng:c.lng},true);
   if(MAP.ready){ const q=MAP.pad(); MAP.map.setView([c.lat,c.lng],Math.max(MAP.map.getZoom(),16),{animate:false}); MAP.map.panBy([-(q.tl[0]-q.br[0])/2,-(q.tl[1]-q.br[1])/2],{animate:false}); }
@@ -560,7 +579,13 @@ function setManual(ll,quiet){
 /* ============================================================
    Шторка: размеры и перетаскивание
    ============================================================ */
-function sheetHeights(){ const H=$("mapView").clientHeight||600; return {peek:204, half:Math.round(H*.52), full:H-122}; }
+function autoH(){
+  const sh=$("sheet"), prev=sh.dataset.state; if(prev==="peek") sh.dataset.state="half";
+  const body=sh.querySelector(".body"), H=$("mapView").clientHeight||600; let h=0;
+  for(const c of sh.children) h+= c===body ? body.scrollHeight : c.offsetHeight;
+  sh.dataset.state=prev; return Math.max(260,Math.min(H-122,h+6));
+}
+function sheetHeights(){ const a=autoH(); return {peek:204, half:a, full:a}; }
 function setSheet(state){
   S.sheet=state; const el=$("sheet"); el.dataset.state=state;
   if(!desktop()){ $("mapView").style.setProperty("--sheet-h", sheetHeights()[state]+"px"); }
@@ -750,14 +775,14 @@ document.addEventListener("click",e=>{
     case "tab": setTab(v); break;
     case "dest": setDest(v); break;
     case "dir": case "swap": { const nv=act==="swap"?(S.dir==="to"?"from":"to"):v; if(S.dir!==nv){ S.dir=nv; S.ride=null; if(S.stop&&!DESTS.includes(S.stop)) S.stop=resolveStop(S.stop); if(S.stop&&!S.stopManual) autoPickStop(); renderTop(); renderSheet(); drawMap({fit:"local"}); } break; }
-    case "pin-done": S.pinMode=false; placePin(); renderTop(); drawMap({}); break;
+    case "pin-done": S.pinMode=false; placePin(); if(!desktop()) setSheet("half"); renderTop(); renderSheet(); drawMap({}); break;
     case "toggle-dest": setDest(S.dest===ENT?RC:ENT); break;
     case "zoom": if(MAP.ready){ +v>0?MAP.map.zoomIn(1):MAP.map.zoomOut(1); } break;
     case "locate-close": closeModal(); setTab("map"); startLocate(); break;
     case "manual-close": closeModal(); startManual(); break;
     case "mode": S.mode=v; store.set("bus.mode",v); renderSheet(); break;
     case "ride": S.ride=+el.dataset.i; renderSheet(); drawMap({fit:"route",soft:true}); $("sheetBody").scrollTop=0; break;
-    case "grab": if(!desktop()) setSheet(S.sheet==="peek"?"half":S.sheet==="half"?"full":"half"); break;
+    case "grab": if(!desktop()) setSheet(S.sheet==="peek"?"half":"peek"); break;
     case "pick-stop": openStopPicker(); break;
     case "pick": { const x=PICK_LIST[+el.dataset.i]; if(x){ closeModal(); selectStop(x.n); if(S.sheet==="peek") setSheet("half"); } break; }
     case "nearest": { const n=nearestStop(); if(n){ S.stopManual=false; store.set("bus.stopManual",false); S.stop=n.name; S.ride=null; store.set("bus.stop",n.name); renderSheet(); drawMap({fit:"local"}); } break; }
@@ -877,7 +902,8 @@ if(!EDIT && navigator.permissions && navigator.permissions.query){
   }).catch(()=>{});
 }
 ["gesturestart","gesturechange"].forEach(t=>document.addEventListener(t,e=>e.preventDefault()));
-document.addEventListener("toggle",e=>{ const d=e.target; if(d&&d.matches&&d.matches("details.path")) S.pathOpen=d.open?d.dataset.pk:null; },true);
+{ const _rs=renderSheet; renderSheet=function(){ _rs.apply(this,arguments); if(!desktop()&&S.sheet!=="peek"&&!S.pinMode) setSheet(S.sheet); }; }
+document.addEventListener("toggle",e=>{ const d=e.target; if(d&&d.matches&&d.matches("details.path")){ S.pathOpen=d.open?d.dataset.pk:null; if(!desktop()&&S.sheet!=="peek") setSheet(S.sheet); } },true);
 function softRender(){
   const b=$("sheetBody"), top=b.scrollTop, det=b.querySelector("details.path"), wasOpen=det&&det.open;
   renderSheet(); b.scrollTop=top; const d2=b.querySelector("details.path"); if(d2&&wasOpen) d2.open=true;

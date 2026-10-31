@@ -312,3 +312,11 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 .cpin i{position:absolute;left:-13px;top:-36px;display:block;width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--you);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45)}
 .cpin::after{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:rgba(0,0,0,.35)}
 .fab.ok{width:auto;padding:0 18px;font:800 15px/1 var(--head);background:var(--acc);color:var(--acc-ink)}
+
+/* номер рейса — только приписка */
+.badge{background:none!important;color:var(--mute)!important;min-width:0!important;height:auto!important;padding:0!important;border-radius:0!important;font:600 13px/1.2 var(--head)!important}
+.badge::before{content:"рейс "}.rchip .dot{display:none}
+/* кнопка «Выбрать» при выборе места на карте */
+.pinbar{position:absolute;z-index:560;left:14px;right:14px;bottom:calc(var(--sheet-h) + 14px);height:54px;border-radius:16px;background:var(--acc);color:var(--acc-ink);font:800 17px/1 var(--head);box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.pinbar[hidden]{display:none}.pinmode .fabs{bottom:calc(var(--sheet-h) + 84px)}
+@media (min-width:860px){.pinbar{left:464px;right:auto;width:300px;bottom:24px}.pinmode .fabs{bottom:92px}}
