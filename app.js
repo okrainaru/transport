@@ -266,7 +266,7 @@ function nearbyList(){
 let NEAR=[];
 function renderNearby(head,body,foot){
   NEAR=nearbyList(); const best=bestStop();
-  head.innerHTML=`<div class="titlebtn"><span class="t"><h2>Ближайшие остановки</h2><small>${S.pinMode?"Выберите место на карте и нажмите «Выбрать»":"Выберите, откуда поедете — тогда построим маршрут"}</small></span></div>`;
+  head.innerHTML=`<div class="titlebtn"><span class="t"><h2>Ближайшие остановки</h2></span></div>`;
   body.innerHTML=`<ul class="stoplist near">${NEAR.map((x,i)=>`<li><button type="button" data-act="pick-near" data-i="${i}"><span class="n">${esc(lab(x.name))}${best&&best.name===x.name?`<em class="fast">ближайший рейс</em>`:""}</span><span class="d">${fmtDist(x.d)} · ${x.min} мин</span></button></li>`).join("")||'<li class="empty">Рядом нет остановок этого направления</li>'}</ul>`;
   foot.hidden=true; body.scrollTop=0;
 }
@@ -375,7 +375,7 @@ function timelineHTML(plan,pr,dist){
   const pk=[S.stop,S.dir,S.dest,sel.legs.map(l=>l.trip.id).join("+"),sel.dep||""].join("|");
   const path = `<details class="path" data-pk="${esc(pk)}"${S.pathOpen===pk?" open":""}><summary>Остановки в пути${inBetween>0?` (${inBetween})`:""}</summary><ul class="pathlist">${pathItems.join("")}</ul></details>`;
 
-  const boardNode = `<li class="node"><div class="rail"><div class="ico">${svg("bus")}</div></div><div>
+  const boardNode = `<li class="node${rcOf(sel.legs[0])?" rcl":""}"><div class="rail"><div class="ico">${svg("bus")}</div></div><div>
       <h3>${esc(boardName)}</h3><div class="sub">${to?"Посадка":"Отправление от "+(destName===ENT?"завода":"РЦ")}</div>${dayNote}${rideCard}${chips}${path}</div></li>`;
 
   const dur = (sel.dep&&sel.arr) ? ` · в пути ${human(toMin(sel.arr)-toMin(sel.dep))}` : "";
@@ -386,7 +386,7 @@ function timelineHTML(plan,pr,dist){
   if(sel.xfer){
     const l1=sel.legs[0], l2=sel.legs[1];
     const wait = (l1.arr&&l2.dep)?toMin(l2.dep)-toMin(l1.arr):null;
-    xferNode=`<li class="node"><div class="rail"><div class="ico xfer">${svg("swap")}</div></div><div>
+    xferNode=`<li class="node${rcOf(l2)?" rcl":""}"><div class="rail"><div class="ico xfer">${svg("swap")}</div></div><div>
       <h3>Пересадка: ${esc(sel.xfer)}</h3><div class="sub">${l1.arr||"?"} → ${l2.dep||"?"}${wait!=null?` · ждать ${human(wait)}`:""} · автобус <span class="badge b${l2.trip.route}" style="height:20px;min-width:34px;font-size:12px">${l2.trip.route}</span></div></div></li>`;
   }
 
@@ -413,11 +413,10 @@ function timelineHTML(plan,pr,dist){
    Верхняя панель, кнопки на карте, вкладки
    ============================================================ */
 function renderTop(){
-  document.documentElement.dataset.dest=S.dest===RC?"rc":"";
   const toP=S.dir==="to", plantName=S.dest===ENT?"Завод":S.dest;
   const meLbl=(S.user&&!S.stopManual)||!S.stop?"Моё местоположение":lab(S.stop);
   const me=`<button type="button" class="ep" data-act="pick-stop">${svg("user")}<span><small>${toP?"Откуда":"Куда"}</small>${esc(meLbl)}</span></button>`;
-  const pl=`<button type="button" class="ep" data-act="toggle-dest" title="Сменить: завод / РЦ Кудиново">${svg("bus")}<span><small>${toP?"Куда":"Откуда"}</small>${esc(plantName)}</span></button>`;
+  const pl=`<button type="button" class="ep plant${S.dest===RC?" rc":""}" data-act="toggle-dest" title="Сменить: завод / РЦ Кудиново">${svg("bus")}<span><small>${toP?"Куда":"Откуда"}</small>${esc(plantName)}</span></button>`;
   $("destSeg").innerHTML=(toP?me:pl)+`<button type="button" class="sw" data-act="swap" aria-label="Поменять местами" title="Поменять местами">${svg("swap")}</button>`+(toP?pl:me);
   const chip=$("whenChip");
   chip.innerHTML=svg("clock")+esc(whenLabel());
@@ -604,7 +603,7 @@ function autoH(){
   for(const c of sh.children) h+= c===body ? body.scrollHeight : c.offsetHeight;
   sh.dataset.state=prev; return Math.max(260,Math.min(H-122,h+6));
 }
-function sheetHeights(){ const a=autoH(); return {peek:280, half:Math.round((($("mapView").clientHeight)||600)*.52), full:($("mapView").clientHeight||600)-122}; }
+function sheetHeights(){ const a=autoH(); return {peek:300, half:Math.round((($("mapView").clientHeight)||600)*.52), full:($("mapView").clientHeight||600)-122}; }
 function setSheet(state){
   if(desktop()) state="half";
   S.sheet=state; const el=$("sheet"); el.dataset.state=state;
@@ -681,6 +680,7 @@ const MAP = {
     this.map.fitBounds(L.latLngBounds(points),{paddingTopLeft:p.tl,paddingBottomRight:p.br,maxZoom,animate:false});
   }
 };
+const rcOf=leg=>!!leg&&(leg.trip.stops[leg.i].stop===RC||leg.trip.stops[leg.j].stop===RC);
 function ridePoints(r){
   const pts=[];
   r.legs.forEach(leg=>{
@@ -694,7 +694,7 @@ function ridePoints(r){
   return pts;
 }
 function stopMarker(s,o){
-  const acc=cssVar("--acc"), card=cssVar("--card"), ink=cssVar("--ink");
+  const acc=o.rc?cssVar("--rc"):cssVar("--acc"), card=cssVar("--card"), ink=cssVar("--ink");
   let m;
   if(EDIT){
     m=L.marker([s.lat,s.lon],{draggable:true,icon:L.divIcon({className:"editdot",html:"<i></i>",iconSize:[22,22]}),title:s.name});
@@ -717,7 +717,7 @@ function drawMap(opts={}){
   const acc=cssVar("--acc"), casing=cssVar("--casing"), mute=cssVar("--mute"), you=cssVar("--you");
   const nb=!EDIT&&S.user&&(S.pinMode||S.view==="nearby"), NB=nb?new Set(nearbyList().map(x=>x.name)):null;
   const plan=(EDIT||nb)?null:upcomingPlan(), sel=plan?pickRide(plan).sel:null;
-  const pathStops=new Set();
+  const pathStops=new Set(), rcStops=new Set();
   let routePts=[];
   if(sel){
     const lines=sel.legs.length?ridePoints(sel):[];
@@ -726,7 +726,7 @@ function drawMap(opts={}){
       MAP.g.route.addLayer(L.polyline(ln.pts,{color:ln.rc?cssVar("--rc"):cssVar("--grn"),weight:5,opacity:1,lineCap:"round",lineJoin:"round",dashArray:ln.road?null:"1 10",interactive:false}));
       routePts=routePts.concat(ln.pts);
     }
-    sel.legs.forEach(leg=>{ for(let k=leg.i;k<=leg.j;k++) pathStops.add(leg.trip.stops[k].stop); });
+    sel.legs.forEach(leg=>{ for(let k=leg.i;k<=leg.j;k++){ pathStops.add(leg.trip.stops[k].stop); if(rcOf(leg)) rcStops.add(leg.trip.stops[k].stop); } });
   }
   /* остановки */
   const served=SERVED[S.dest][S.dir];
@@ -734,7 +734,7 @@ function drawMap(opts={}){
     if(!hasXY(s)) continue;
     if(!EDIT){ if(DESTS.includes(s.name)) continue; if(!served.has(s.name)&&s.name!==S.stop) continue; if(nb&&!NB.has(s.name)) continue; if(pathStops.size&&!pathStops.has(s.name)&&s.name!==S.stop) continue;
       if(s.twin!=null&&s.name!==S.stop){ const c=twinsOf(s.name).filter(x=>served.has(x)); if(c.length>1&&c[0]!==s.name) continue; } }
-    MAP.g.stops.addLayer(stopMarker(s,{sel:s.name===S.stop,path:pathStops.has(s.name)}));
+    MAP.g.stops.addLayer(stopMarker(s,{sel:s.name===S.stop,path:pathStops.has(s.name),rc:rcStops.has(s.name)&&s.name!==S.stop}));
   }
   /* МПЗ и РЦ */
   if(!EDIT) for(const d of DESTS){

@@ -336,13 +336,15 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 :root{--grn:#00A6A6;--rc-soft:#FFEBD2}
 :root[data-theme="dark"]{--grn:#00A6A6;--rc-soft:#3A2A0F}
 @media (prefers-color-scheme:dark){:root[data-theme="auto"]{--grn:#00A6A6;--rc-soft:#3A2A0F}}
-:root[data-dest="rc"]{--acc:#E07A00;--acc-ink:#fff;--acc-text:#A85A00;--acc-soft:#FFEBD2}
-:root[data-theme="dark"][data-dest="rc"]{--acc:#F2A33A;--acc-ink:#1A1200;--acc-text:#F5B45E;--acc-soft:#3A2A0F}
-@media (prefers-color-scheme:dark){:root[data-theme="auto"][data-dest="rc"]{--acc:#F2A33A;--acc-ink:#1A1200;--acc-text:#F5B45E;--acc-soft:#3A2A0F}}
 .pill.rc{background:var(--rc-soft);color:var(--rc)}
 .pin.rcp{--acc:var(--rc);--acc-ink:#fff}.pin.rcp span{border-color:var(--rc)}
 /* нижняя панель: информация всегда раскрыта, просто уходит за край экрана */
 .peekline,.sheet[data-state="peek"] .peekline{display:none!important}
-.sheet:not([data-state="full"]) .body{flex:none;overflow:visible}
-.sheet[data-state="full"] .body{flex:1;min-height:0;overflow-y:auto}
-@media (min-width:860px){.sheet[data-state] .body{flex:1;min-height:0;overflow-y:auto}}
+
+/* панель: содержимое видно и в свёрнутом положении, список прокручивается */
+.sheet .body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sheet[data-state="peek"] .body{display:block}
+/* оранжевый — только РЦ: метка, участок, остановки участка, иконка «Куда», линия в подробностях */
+.pin.rcp span{background:var(--rc)!important;color:#fff!important}
+.rbar .ep.plant.rc svg{color:var(--rc)}
+.node.rcl .rail::before{background:var(--rc);opacity:.85}
