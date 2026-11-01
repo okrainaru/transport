@@ -14,12 +14,13 @@
   <section class="view" id="mapView">
     <div id="map" aria-label="Карта"></div>
     <div class="topbar">
-      <div class="rbar" id="destSeg" role="group" aria-label="Куда едем"></div>
       <button class="whenchip" id="whenChip" type="button" data-act="open-when"></button>
+      <button class="whenchip" id="schedBtn" type="button" data-act="tab" data-v="sched"></button>
     </div>
     <div class="sheet" id="sheet" data-state="half">
       <div class="drag" id="drag">
         <div class="grab" data-act="grab"><i></i></div>
+        <div class="rbar" id="destSeg" role="group" aria-label="Куда едем"></div>
         <div class="head" id="sheetHead"></div>
       </div>
       <div class="body" id="sheetBody"></div>
