@@ -12,7 +12,7 @@ const Q = new URLSearchParams(location.search);
 const EDIT = Q.get("edit")==="1";
 const ENT = D.enterprise, RC = "РЦ Кудиново";
 const DESTS = [ENT, RC];
-const SHORT = {[ENT]:"МПЗ", [RC]:"РЦ"};
+const SHORT = {[ENT]:"Завод", [RC]:"РЦ"};
 const TO_LABEL = {[ENT]:"До завода", [RC]:"До РЦ"};
 const stopByName = Object.fromEntries(D.stops.map(s=>[s.name,s]));
 const STOP_IDX = Object.fromEntries(D.stops.map((s,i)=>[s.name,i]));
@@ -413,6 +413,7 @@ function timelineHTML(plan,pr,dist){
    Верхняя панель, кнопки на карте, вкладки
    ============================================================ */
 function renderTop(){
+  document.documentElement.dataset.dest=S.dest===RC?"rc":"";
   const toP=S.dir==="to", plantName=S.dest===ENT?"Завод":S.dest;
   const meLbl=(S.user&&!S.stopManual)||!S.stop?"Моё местоположение":lab(S.stop);
   const me=`<button type="button" class="ep" data-act="pick-stop">${svg("user")}<span><small>${toP?"Откуда":"Куда"}</small>${esc(meLbl)}</span></button>`;
@@ -469,7 +470,7 @@ function renderSchedList(){
       const past = live && toMin(t.end)<c.min;
       const n=t.stops.filter(s=>s.stop!==ENT).length;
       html+=`<div class="trip${open?" open":""}${past?" past":""}"><button type="button" data-act="trip" data-id="${t.id}" aria-expanded="${open}">
-        <span><span class="tt">${t.start} – ${t.end}</span><span class="ts"><span>${t.part==="morning"?"Утро":"Вечер"}</span><span class="badge b${t.route}">${t.route}</span>${t.rc?`<span class="pill">для сотрудников РЦ</span>`:""}<span>${n} ${n===1?"остановка":n<5?"остановки":"остановок"}</span></span></span>
+        <span><span class="tt">${t.start} – ${t.end}</span><span class="ts"><span>${t.part==="morning"?"Утро":"Вечер"}</span><span class="badge b${t.route}">${t.route}</span>${t.rc?`<span class="pill rc">для сотрудников РЦ</span>`:""}<span>${n} ${n===1?"остановка":n<5?"остановки":"остановок"}</span></span></span>
         <span class="chev">${svg("chev")}</span></button>`;
       if(open){
         html+=`<div class="tbody"><ol class="stline">${t.stops.map(s=>{
@@ -603,7 +604,7 @@ function autoH(){
   for(const c of sh.children) h+= c===body ? body.scrollHeight : c.offsetHeight;
   sh.dataset.state=prev; return Math.max(260,Math.min(H-122,h+6));
 }
-function sheetHeights(){ const a=autoH(); return {peek:236, half:a, full:a}; }
+function sheetHeights(){ const a=autoH(); return {peek:280, half:Math.round((($("mapView").clientHeight)||600)*.52), full:($("mapView").clientHeight||600)-122}; }
 function setSheet(state){
   if(desktop()) state="half";
   S.sheet=state; const el=$("sheet"); el.dataset.state=state;
@@ -655,7 +656,7 @@ const MAP = {
   load(){
     if(!window.L){ toast("Не удалось загрузить карту: нет папки vendor/leaflet",8000); return; }
     try{
-      const map=this.map=L.map("map",{zoomControl:false,attributionControl:false,zoomSnap:.5,minZoom:8,maxZoom:18,inertia:true,inertiaDeceleration:1700,inertiaMaxSpeed:2800,easeLinearity:.18,wheelDebounceTime:30,wheelPxPerZoomLevel:100,bounceAtZoomLimits:false,
+      const map=this.map=L.map("map",{zoomControl:false,attributionControl:false,zoomSnap:0,zoomAnimationThreshold:8,minZoom:8,maxZoom:18,inertia:true,inertiaDeceleration:1700,inertiaMaxSpeed:2800,easeLinearity:.18,wheelDebounceTime:30,wheelPxPerZoomLevel:130,bounceAtZoomLimits:false,
         maxBounds:L.latLngBounds(CFG.searchBounds).pad(.6),maxBoundsViscosity:.8}).setView([55.83,38.35],10);
       L.tileLayer(CFG.tileUrl,{maxZoom:19,detectRetina:true,updateWhenIdle:false,keepBuffer:4}).addTo(map);
       for(const k of ["route","stops","walk","pins","user"]) this.g[k]=L.layerGroup().addTo(map);
@@ -687,7 +688,7 @@ function ridePoints(r){
       const a=leg.trip.stops[k].stop, b=leg.trip.stops[k+1].stop; if(a===b) continue;
       const A=stopByName[a], B=stopByName[b]; if(!hasXY(A)||!hasXY(B)) continue;
       const g=GEOM[pairKey(a,b)];
-      pts.push({pts:g||[[A.lat,A.lon],[B.lat,B.lon]],road:!!g});
+      pts.push({pts:g||[[A.lat,A.lon],[B.lat,B.lon]],road:!!g,rc:leg.trip.stops[leg.i].stop===RC||leg.trip.stops[leg.j].stop===RC});
     }
   });
   return pts;
@@ -722,7 +723,7 @@ function drawMap(opts={}){
     const lines=sel.legs.length?ridePoints(sel):[];
     for(const ln of lines){
       MAP.g.route.addLayer(L.polyline(ln.pts,{color:casing,weight:10,opacity:.95,lineCap:"round",lineJoin:"round",interactive:false}));
-      MAP.g.route.addLayer(L.polyline(ln.pts,{color:S.dest===RC?cssVar("--rc"):acc,weight:5,opacity:1,lineCap:"round",lineJoin:"round",dashArray:ln.road?null:"1 10",interactive:false}));
+      MAP.g.route.addLayer(L.polyline(ln.pts,{color:ln.rc?cssVar("--rc"):cssVar("--grn"),weight:5,opacity:1,lineCap:"round",lineJoin:"round",dashArray:ln.road?null:"1 10",interactive:false}));
       routePts=routePts.concat(ln.pts);
     }
     sel.legs.forEach(leg=>{ for(let k=leg.i;k<=leg.j;k++) pathStops.add(leg.trip.stops[k].stop); });
@@ -738,7 +739,7 @@ function drawMap(opts={}){
   /* МПЗ и РЦ */
   if(!EDIT) for(const d of DESTS){
     const s=stopByName[d]; if(!hasXY(s)) continue;
-    const mk=L.marker([s.lat,s.lon],{icon:L.divIcon({className:"pin"+(S.dest===d?" act":"")+(S.stop===d?" sel":""),html:`<span>${SHORT[d]}</span>`,iconSize:[S.dest===d?64:54,34],iconAnchor:[S.dest===d?32:27,17]}),zIndexOffset:1000,title:d});
+    const mk=L.marker([s.lat,s.lon],{icon:L.divIcon({className:"pin"+(S.dest===d?" act":"")+(S.stop===d?" sel":"")+(d===RC?" rcp":""),html:`<span>${SHORT[d]}</span>`,iconSize:[S.dest===d?82:72,34],iconAnchor:[S.dest===d?41:36,17]}),zIndexOffset:1000,title:d});
     mk.on("click",()=>setDest(d)); MAP.g.pins.addLayer(mk);
   }
   /* я и путь пешком */
@@ -760,6 +761,8 @@ function drawMap(opts={}){
       const vis=ll=>{ const c=MAP.map.latLngToContainerPoint(ll); return c.x>=q.tl[0]&&c.y>=q.tl[1]&&c.x<=sz.x-q.br[0]&&c.y<=sz.y-q.br[1]; };
       if(pts.every(vis)) return; }
     MAP.fit(pts.length?pts:[],opts.soft&&MAP.ready?Math.min(15,MAP.map.getZoom()):15);
+  }else if(opts.fit==="stop"){
+    if(hasXY(st)) MAP.fit([[st.lat,st.lon]],Math.max(MAP.map.getZoom(),15));
   }else if(opts.fit==="all"){
     const pts=D.stops.filter(hasXY).map(s=>[s.lat,s.lon]); MAP.fit(pts,13);
   }
@@ -784,7 +787,7 @@ function selectStop(name,fromMap){
   name=resolveStop(name);
   S.view="route"; S.stop=name; S.stopManual=true; S.ride=null; store.set("bus.stop",name); store.set("bus.stopManual",true);
   if(fromMap && S.sheet==="peek") setSheet("half");
-  renderSheet(); drawMap({fit:"local"}); $("sheetBody").scrollTop=0;
+  renderSheet(); drawMap({fit:"stop"}); $("sheetBody").scrollTop=0;
 }
 
 document.addEventListener("click",e=>{
@@ -799,12 +802,12 @@ document.addEventListener("click",e=>{
     case "nearby": if(S.user&&S.locWarn!=="far"){ S.view="nearby"; renderSheet(); drawMap({fit:"local"}); } else openStopPicker(); break;
     case "pick-near": { const x=NEAR[+el.dataset.i]; if(x){ selectStop(x.name); if(!desktop()&&S.sheet==="peek") setSheet("half"); } break; }
     case "toggle-dest": setDest(S.dest===ENT?RC:ENT); break;
-    case "zoom": if(MAP.ready){ +v>0?MAP.map.zoomIn(1):MAP.map.zoomOut(1); } break;
+    case "zoom": if(MAP.ready){ const m=MAP.map; m.flyTo(m.getCenter(),Math.max(m.getMinZoom(),Math.min(m.getMaxZoom(),m.getZoom()+(+v>0?1:-1))),{duration:.6,easeLinearity:.25}); } break;
     case "locate-close": closeModal(); setTab("map"); startLocate(); break;
     case "manual-close": closeModal(); startManual(); break;
     case "mode": S.mode=v; store.set("bus.mode",v); renderSheet(); break;
     case "ride": S.ride=+el.dataset.i; renderSheet(); drawMap({fit:"route",soft:true}); $("sheetBody").scrollTop=0; break;
-    case "grab": if(!desktop()) setSheet(S.sheet==="peek"?"half":"peek"); break;
+    case "grab": if(!desktop()) setSheet(S.sheet==="peek"?"half":S.sheet==="half"?"full":"peek"); break;
     case "pick-stop": openStopPicker(); break;
     case "pick": { const x=PICK_LIST[+el.dataset.i]; if(x){ closeModal(); selectStop(x.n); if(S.sheet==="peek") setSheet("half"); } break; }
     case "nearest": { const n=nearestStop(); if(n){ S.stopManual=false; store.set("bus.stopManual",false); S.stop=n.name; S.ride=null; store.set("bus.stop",n.name); renderSheet(); drawMap({fit:"local"}); } break; }
