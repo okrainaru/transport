@@ -342,9 +342,18 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 .peekline,.sheet[data-state="peek"] .peekline{display:none!important}
 
 /* панель: содержимое видно и в свёрнутом положении, список прокручивается */
-.sheet .body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sheet .body{flex:1;min-height:0;overflow:hidden;-webkit-overflow-scrolling:touch}
 .sheet[data-state="peek"] .body{display:block}
 /* оранжевый — только РЦ: метка, участок, остановки участка, иконка «Куда», линия в подробностях */
 .pin.rcp span{background:var(--rc)!important;color:#fff!important}
 .rbar .ep.plant.rc svg{color:var(--rc)}
 .node.rcl .rail::before{background:var(--rc);opacity:.85}
+
+/* прокрутка — только когда панель выдвинута до конца; в свёрнутом виде панель компактная */
+.sheet[data-state="full"] .body{overflow-y:auto}
+@media (min-width:860px){.sheet[data-state] .body{overflow-y:auto}}
+.sheet[data-state="peek"] .head{padding-bottom:4px}
+.sheet[data-state="peek"] .titlebtn{min-height:36px}
+.sheet[data-state="peek"] .titlebtn small,.sheet[data-state="peek"] .notice{display:none}
+.sheet[data-state="peek"] .rbar{margin-bottom:2px}.sheet[data-state="peek"] .rbar .ep{height:40px}
+.sheet[data-state="peek"] .grab{padding:6px 0 2px}

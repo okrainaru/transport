@@ -603,7 +603,7 @@ function autoH(){
   for(const c of sh.children) h+= c===body ? body.scrollHeight : c.offsetHeight;
   sh.dataset.state=prev; return Math.max(260,Math.min(H-122,h+6));
 }
-function sheetHeights(){ const a=autoH(); return {peek:300, half:Math.round((($("mapView").clientHeight)||600)*.52), full:($("mapView").clientHeight||600)-122}; }
+function sheetHeights(){ const a=autoH(); return {peek:Math.max(132,Math.round((($("mapView").clientHeight)||600)*.2)), half:Math.round((($("mapView").clientHeight)||600)*.52), full:($("mapView").clientHeight||600)-122}; }
 function setSheet(state){
   if(desktop()) state="half";
   S.sheet=state; const el=$("sheet"); el.dataset.state=state;
@@ -739,7 +739,7 @@ function drawMap(opts={}){
   /* МПЗ и РЦ */
   if(!EDIT) for(const d of DESTS){
     const s=stopByName[d]; if(!hasXY(s)) continue;
-    const mk=L.marker([s.lat,s.lon],{icon:L.divIcon({className:"pin"+(S.dest===d?" act":"")+(S.stop===d?" sel":"")+(d===RC?" rcp":""),html:`<span>${SHORT[d]}</span>`,iconSize:[S.dest===d?82:72,34],iconAnchor:[S.dest===d?41:36,17]}),zIndexOffset:1000,title:d});
+    const mk=L.marker([s.lat,s.lon],{icon:L.divIcon({className:"pin"+(S.dest===d?" act":"")+(S.stop===d?" sel":"")+(d===RC&&S.dest===RC?" rcp":""),html:`<span>${SHORT[d]}</span>`,iconSize:[S.dest===d?82:72,34],iconAnchor:[S.dest===d?41:36,17]}),zIndexOffset:1000,title:d});
     mk.on("click",()=>setDest(d)); MAP.g.pins.addLayer(mk);
   }
   /* я и путь пешком */
@@ -760,6 +760,7 @@ function drawMap(opts={}){
     if(opts.soft&&pts.length&&MAP.ready){ const q=MAP.pad(),sz=MAP.map.getSize();
       const vis=ll=>{ const c=MAP.map.latLngToContainerPoint(ll); return c.x>=q.tl[0]&&c.y>=q.tl[1]&&c.x<=sz.x-q.br[0]&&c.y<=sz.y-q.br[1]; };
       if(pts.every(vis)) return; }
+    if(opts.fly&&pts.length>1){ const q=MAP.pad(); MAP.map.flyToBounds(L.latLngBounds(pts),{paddingTopLeft:q.tl,paddingBottomRight:q.br,maxZoom:15,duration:1.1,easeLinearity:.25}); return; }
     MAP.fit(pts.length?pts:[],opts.soft&&MAP.ready?Math.min(15,MAP.map.getZoom()):15);
   }else if(opts.fit==="stop"){
     if(hasXY(st)) MAP.fit([[st.lat,st.lon]],Math.max(MAP.map.getZoom(),15));
@@ -787,7 +788,7 @@ function selectStop(name,fromMap){
   name=resolveStop(name);
   S.view="route"; S.stop=name; S.stopManual=true; S.ride=null; store.set("bus.stop",name); store.set("bus.stopManual",true);
   if(fromMap && S.sheet==="peek") setSheet("half");
-  renderSheet(); drawMap({fit:"stop"}); $("sheetBody").scrollTop=0;
+  renderSheet(); drawMap({fit:"route",fly:true}); $("sheetBody").scrollTop=0;
 }
 
 document.addEventListener("click",e=>{
@@ -800,7 +801,7 @@ document.addEventListener("click",e=>{
     case "dir": case "swap": { const nv=act==="swap"?(S.dir==="to"?"from":"to"):v; if(S.dir!==nv){ S.dir=nv; S.ride=null; if(S.stop&&!DESTS.includes(S.stop)) S.stop=resolveStop(S.stop); if(S.stop&&!S.stopManual) autoPickStop(); renderTop(); renderSheet(); drawMap({fit:"local"}); } break; }
     case "pin-done": S.pinMode=false; S.view="nearby"; placePin(); if(!desktop()) setSheet("half"); renderTop(); renderSheet(); drawMap({}); break;
     case "nearby": if(S.user&&S.locWarn!=="far"){ S.view="nearby"; renderSheet(); drawMap({fit:"local"}); } else openStopPicker(); break;
-    case "pick-near": { const x=NEAR[+el.dataset.i]; if(x){ selectStop(x.name); if(!desktop()&&S.sheet==="peek") setSheet("half"); } break; }
+    case "pick-near": { const x=NEAR[+el.dataset.i]; if(x){ if(!desktop()&&S.sheet==="peek") setSheet("half"); selectStop(x.name); } break; }
     case "toggle-dest": setDest(S.dest===ENT?RC:ENT); break;
     case "zoom": if(MAP.ready){ const m=MAP.map; m.flyTo(m.getCenter(),Math.max(m.getMinZoom(),Math.min(m.getMaxZoom(),m.getZoom()+(+v>0?1:-1))),{duration:.6,easeLinearity:.25}); } break;
     case "locate-close": closeModal(); setTab("map"); startLocate(); break;
@@ -809,7 +810,7 @@ document.addEventListener("click",e=>{
     case "ride": S.ride=+el.dataset.i; renderSheet(); drawMap({fit:"route",soft:true}); $("sheetBody").scrollTop=0; break;
     case "grab": if(!desktop()) setSheet(S.sheet==="peek"?"half":S.sheet==="half"?"full":"peek"); break;
     case "pick-stop": openStopPicker(); break;
-    case "pick": { const x=PICK_LIST[+el.dataset.i]; if(x){ closeModal(); selectStop(x.n); if(S.sheet==="peek") setSheet("half"); } break; }
+    case "pick": { const x=PICK_LIST[+el.dataset.i]; if(x){ closeModal(); if(S.sheet==="peek") setSheet("half"); selectStop(x.n); } break; }
     case "nearest": { const n=nearestStop(); if(n){ S.stopManual=false; store.set("bus.stopManual",false); S.stop=n.name; S.ride=null; store.set("bus.stop",n.name); renderSheet(); drawMap({fit:"local"}); } break; }
     case "locate": setTab("map"); startLocate(); break;
     case "manual": startManual(); break;
