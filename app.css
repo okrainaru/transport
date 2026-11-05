@@ -385,3 +385,13 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 .dmq{margin-left:8px;color:var(--mute);font:600 14px var(--head)}
 .nblbl{display:none}.zl16 .nblbl{display:block}
 .chip.dayinput{position:relative;overflow:hidden}.chip.dayinput input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+
+/* кнопки выбора места, список ближайших, клавиатура */
+.pinbar[hidden]{display:none!important}
+.pinbar button{display:flex;align-items:center;justify-content:center;text-align:center}
+.sheet{margin-bottom:var(--kb,0px)}
+.stoplist.near button{display:flex;align-items:center;gap:10px;text-align:left}
+.stoplist.near .n{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left}
+.stoplist.near .fast{margin-left:0}
+.stoplist.near .d{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:var(--mute);flex:none}
+.stoplist.near .d svg{width:16px;height:16px}

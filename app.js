@@ -16,10 +16,11 @@ const SHORT = {[ENT]:"Завод", [RC]:"РЦ"};
 const TO_LABEL = {[ENT]:"До завода", [RC]:"До РЦ"};
 const stopByName = Object.fromEntries(D.stops.map(s=>[s.name,s]));
 const STOP_IDX = Object.fromEntries(D.stops.map((s,i)=>[s.name,i]));
-const lab=n=>String(n||"").replace(/\s*\((?:остановка\s+)?(?:"[^"]*"\s+)?(?:в сторону|со стороны)[^()]*\)/gi,"").replace(/\s+в сторону [^()]*\)/gi,")").trim();
+const lab=n=>{ let t=String(n||"").replace(/\s*\((?:остановка\s+)?(?:"[^"]*"\s+)?(?:в сторону|со стороны)[^()]*\)/gi,"").replace(/\s+в сторону [^()]*\)/gi,")").trim();
+  const m=t.match(/^([^()]+?)\s+-\s+(.+)$/); if(m){ let r=m[2].trim(); const q=r.match(/^(.*?)\s*\(([^()]*)\)$/); if(q) r=q[1]?q[1]+", "+q[2]:q[2]; t=m[1].trim()+" ("+r+")"; } return t; };
 const CITIES=["Ногинск","Электросталь","Электроугли","Кудиново","Монино","Лосино-Петровский"];
 const tripHasCity=(t,c)=>t.stops.some(s=>lab(s.stop).replace(/\([^)]*\)/g,"").toLowerCase().includes(c.toLowerCase()));
-const ql=n=>"«"+lab(n)+"»";
+const ql=n=>lab(n);
 const TW={};D.stops.forEach(s=>{if(s.twin!=null)(TW[s.twin]=TW[s.twin]||[]).push(s.name)});
 const twinsOf=n=>{const s=stopByName[n];return s&&s.twin!=null?TW[s.twin]:[n]};
 const ROUTES = [...new Set(D.trips.map(t=>t.route))].sort();
@@ -46,7 +47,8 @@ const ICONS = {
   pin:'<path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>',
   plane:'<path d="M21 3 3 10.5l7 2.5 2.5 7L21 3z"/><path d="M10 13 21 3"/>',
   back:'<path d="M15 5l-7 7 7 7"/>',
-  plan:'<rect x="3" y="5" width="14" height="14" rx="2.5"/><path d="M3 10h14M7 3v4M13 3v4"/><circle cx="17.5" cy="17.5" r="4.6" fill="var(--card)"/><path d="M17.5 15.2v2.5l1.5 1"/>'
+  plan:'<rect x="3" y="5" width="14" height="14" rx="2.5"/><path d="M3 10h14M7 3v4M13 3v4"/><circle cx="17.5" cy="17.5" r="4.6" fill="var(--card)"/><path d="M17.5 15.2v2.5l1.5 1"/>',
+  walk:'<circle cx="13.5" cy="4.5" r="1.7"/><path d="M10 21l2.3-6.3M13.5 8l-2.6 3.6-3 .6M13.5 8l2.2 3.2 2.8.8M12.3 14.7l2.4 2.3 1 4M11 11.6l1.3 3.1"/>'
 };
 const svg = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 
@@ -276,6 +278,11 @@ function renderFrom(head,body,foot){
     <ul class="stoplist addr" id="addrRes"></ul>
     <div class="row2 frombtns"><button class="btn" type="button" data-act="locate">${svg("plane")}Определить меня</button><button class="btn sec" type="button" data-act="manual">${svg("pin")}Выбрать на карте</button></div>`;
   foot.hidden=true;
+  const inp=$("addrQ");
+  inp.addEventListener("input",()=>{ clearTimeout(addrT); const v=inp.value; if(v.trim().length>=3&&$("addrRes")) $("addrRes").innerHTML='<li class="empty">Ищем…</li>'; addrT=setTimeout(()=>addrSearch(v),450); });
+  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ clearTimeout(addrT); addrSearch(inp.value); } });
+  inp.addEventListener("focus",()=>{ if(!desktop()) setSheet("full"); });
+  if(desktop()) setTimeout(()=>inp.focus(),60);
 }
 const ADDR_AB={"ул":"улица","ул.":"улица","улица":"улица","пр-т":"проспект","пр-т.":"проспект","просп.":"проспект","проспект":"проспект","пер":"переулок","пер.":"переулок","переулок":"переулок","пл":"площадь","пл.":"площадь","ш":"шоссе","ш.":"шоссе"};
 /* «ногинск, ул юбилейная д 9» → «улица юбилейная 9, ногинск» (так геокодер находит дом) */
@@ -302,12 +309,11 @@ async function addrSearch(q){
   ADDR=list.map(x=>({lat:+x.lat,lon:+x.lon,name:String(x.display_name).split(",").slice(0,3).join(",").trim()}));
   $("addrRes").innerHTML=ADDR.map((a,i)=>`<li><button type="button" data-act="pick-addr" data-i="${i}"><span class="n">${esc(a.name)}</span></button></li>`).join("")||'<li class="empty">Ничего не нашли. Попробуйте так: город, улица, дом</li>';
 }
-document.addEventListener("input",e=>{ if(e.target.id==="addrQ"){ clearTimeout(addrT); const v=e.target.value; addrT=setTimeout(()=>addrSearch(v),600); } });
-document.addEventListener("keydown",e=>{ if(e.target.id==="addrQ"&&e.key==="Enter"){ clearTimeout(addrT); addrSearch(e.target.value); } });
+
 function renderNearby(head,body,foot){
   NEAR=nearbyList(); const best=bestStop();
   head.innerHTML=`<div class="trow"><button class="backbtn" type="button" data-act="${S.pinMode?"pin-back":"pick-stop"}" aria-label="Назад">${svg("back")}</button><div class="titlebtn"><span class="t"><h2>Ближайшие остановки</h2></span></div></div>${S.pinMode&&desktop()?`<div class="selrow"><button class="selb" type="button" data-act="pin-back">Назад</button><button class="selbtn" type="button" data-act="pin-done">Выбрать</button></div>`:""}`;
-  body.innerHTML=`<ul class="stoplist near">${NEAR.map((x,i)=>`<li><button type="button" data-act="pick-near" data-i="${i}"><span class="n">${esc(ql(x.name))}${best&&best.name===x.name?`<em class="fast">ближайший рейс</em>`:""}</span><span class="d">${fmtDist(x.d)} · ${x.min} мин</span></button></li>`).join("")||'<li class="empty">Рядом нет остановок этого направления</li>'}</ul>`;
+  body.innerHTML=`<ul class="stoplist near">${NEAR.map((x,i)=>`<li><button type="button" data-act="pick-near" data-i="${i}"><span class="n">${esc(ql(x.name))}${best&&best.name===x.name?`<em class="fast">ближайший рейс</em>`:""}</span><span class="d">${svg("walk")}${fmtDist(x.d)} · ${x.min} мин</span></button></li>`).join("")||'<li class="empty">Рядом нет остановок этого направления</li>'}</ul>`;
   foot.hidden=true; body.scrollTop=0;
 }
 function renderSheet(){
@@ -502,7 +508,6 @@ function renderSchedHead(){
   const tom=new Date(c.today.getFullYear(),c.today.getMonth(),c.today.getDate()+1), tIso=iso(tom), sd=S.schedDate, other=!!sd&&sd!==tIso&&sd!==iso(c.today);
   const days=`<button class="chip" type="button" data-act="sday" data-v="" aria-pressed="${!sd||sd===iso(c.today)}">${sameDay(c.date,c.today)?"Сегодня":dl.replace(/^./,x=>x.toUpperCase())}</button><button class="chip" type="button" data-act="sday" data-v="${tIso}" aria-pressed="${sd===tIso}">Завтра</button><label class="chip dayinput" aria-pressed="${other}">${other?dateLabel(schedDate()):"Другой день"}<input type="date" id="schedDate" value="${sd||iso(c.today)}" min="${iso(c.today)}"></label>`;
   $("schedHead").innerHTML=`<div class="row"><button class="iconbtn" type="button" data-act="tab" data-v="map" aria-label="К карте" title="К карте">${svg("back")}</button><h1>Расписание</h1>
-    <button class="whenchip${S.when?" on":""}" type="button" data-act="open-when">${svg("plan")}${esc(whenLabel())}</button>
     <button class="iconbtn" type="button" data-act="theme" aria-label="Тема оформления" title="Тема: ${({auto:"как в системе",light:"светлая",dark:"тёмная"})[S.theme]}">${svg("theme")}</button></div>
     <div class="hscroll" role="group" aria-label="Город">${chips}</div>
     <div class="hscroll" role="group" aria-label="День" style="padding-top:2px">${days}</div>
@@ -658,7 +663,8 @@ function autoH(){
   for(const c of sh.children) h+= c===body ? body.scrollHeight : c.offsetHeight;
   sh.dataset.state=prev; return Math.max(260,Math.min(H-122,h+6));
 }
-function sheetHeights(){ const a=autoH(); return {peek:Math.max(132,Math.round((($("mapView").clientHeight)||600)*.2)), half:Math.round((($("mapView").clientHeight)||600)*.52), full:($("mapView").clientHeight||600)-122}; }
+function sheetHeights(){ const a=autoH(); const vh=window.visualViewport?visualViewport.height:0, cap=vh?Math.round(vh-96):1e5;
+  return {peek:Math.max(132,Math.round((($("mapView").clientHeight)||600)*.2)), half:Math.min(cap,Math.round((($("mapView").clientHeight)||600)*.52)), full:Math.min(cap,($("mapView").clientHeight||600)-122)}; }
 function setSheet(state){
   if(desktop()) state="half";
   S.sheet=state; if(state!=="full"){ const b=$("sheetBody"); if(b) b.scrollTop=0; } const el=$("sheet"); el.dataset.state=state;
@@ -691,6 +697,11 @@ function setSheet(state){
     window.addEventListener("click",swallow,{capture:true,once:true});
     setTimeout(()=>window.removeEventListener("click",swallow,{capture:true}),350);
   };
+  const startDrag=y=>{ sy=lastY=y; sh=sheet.offsetHeight; moved=false; active=true; lastT=performance.now(); vel=0;
+    window.addEventListener("pointermove",move); window.addEventListener("pointerup",end); window.addEventListener("pointercancel",end); };
+  let TY=0, TS=false, TD=false;
+  sheet.addEventListener("touchstart",e=>{ const b=$("sheetBody"); TY=e.touches[0].clientY; TD=false; TS=!desktop()&&S.sheet==="full"&&!e.target.closest("#drag")&&!!b&&b.scrollTop<=0; },{passive:true});
+  sheet.addEventListener("touchmove",e=>{ if(TD){ e.preventDefault(); return; } if(!TS) return; const dy=e.touches[0].clientY-TY; if(dy>6){ TD=true; e.preventDefault(); startDrag(TY); } else if(dy<-6) TS=false; },{passive:false});
   sheet.addEventListener("pointerdown",e=>{
     if(desktop()||e.button>0) return;
     if(S.sheet==="full" && !e.target.closest("#drag")) return;
@@ -767,7 +778,7 @@ function stopMarker(s,o){
 }
 function drawMap(opts={}){
   if(!MAP.ready) return;
-  if(!MAP._mv){ MAP._mv=1; const zl=()=>MAP.map.getContainer().classList.toggle("zl16",MAP.map.getZoom()>=16); MAP.map.on("zoomend",zl); zl(); MAP.map.on("moveend",()=>{ if(S.pinMode) pinSync(); }); window.addEventListener("resize",placePin); }
+  if(!MAP._mv){ MAP._mv=1; const zl=()=>MAP.map.getContainer().classList.toggle("zl16",MAP.map.getZoom()>=14.5); MAP.map.on("zoomend",zl); zl(); MAP.map.on("moveend",()=>{ if(S.pinMode) pinSync(); }); window.addEventListener("resize",placePin); }
   placePin();
   Object.values(MAP.g).forEach(l=>l.clearLayers());
   const acc=cssVar("--acc"), casing=cssVar("--casing"), mute=cssVar("--mute"), you=cssVar("--you");
@@ -815,7 +826,10 @@ function drawMap(opts={}){
     const pts=routePts.slice(); if(S.user&&S.locWarn!=="far") pts.push([S.user.lat,S.user.lon]);
     if(opts.soft&&pts.length&&MAP.ready){ const bb=MAP.map.getBounds().pad(-0.04); if(pts.every(q=>bb.contains(q))) return;
       MAP.map.fitBounds(L.latLngBounds(pts),{padding:[40,40],maxZoom:MAP.map.getZoom(),animate:true}); return; }
-    if(opts.fly&&pts.length>1){ const q=MAP.pad(); MAP.map.flyToBounds(L.latLngBounds(pts),{paddingTopLeft:q.tl,paddingBottomRight:q.br,maxZoom:15,duration:1.1,easeLinearity:.25}); return; }
+    if(opts.fly&&pts.length>1){ const q=MAP.pad(), b=L.latLngBounds(pts), z=MAP.map.getBoundsZoom(b,false,L.point(q.tl[0]+q.br[0],q.tl[1]+q.br[1]));
+      let bb=b; if(z<12.5){ const near=[]; if(S.user&&S.locWarn!=="far") near.push({lat:S.user.lat,lon:S.user.lon}); if(hasXY(st)) near.push({lat:st.lat,lon:st.lon});
+        const around=pts.filter(p=>near.some(n=>haversine(n,{lat:p[0],lon:p[1]})<9000)); bb=L.latLngBounds(around.length?around:(near.length?near.map(n=>[n.lat,n.lon]):pts)); }
+      MAP.map.flyToBounds(bb,{paddingTopLeft:q.tl,paddingBottomRight:q.br,maxZoom:15,duration:1.1,easeLinearity:.25}); return; }
     MAP.fit(pts.length?pts:[],opts.soft&&MAP.ready?Math.min(15,MAP.map.getZoom()):15);
   }else if(opts.fit==="stop"){
     if(hasXY(st)) MAP.fit([[st.lat,st.lon]],Math.max(MAP.map.getZoom(),15));
@@ -986,6 +1000,7 @@ if(!EDIT && navigator.permissions && navigator.permissions.query){
   }).catch(()=>{});
 }
 document.addEventListener("touchmove",e=>{ if(e.touches.length>1&&!e.target.closest("#map")) e.preventDefault(); },{passive:false});
+if(window.visualViewport){ const kb=()=>{ const v=visualViewport; document.documentElement.style.setProperty("--kb",Math.max(0,Math.round(window.innerHeight-v.height-v.offsetTop))+"px"); if(S.sheet!=="peek") setSheet(S.sheet); }; visualViewport.addEventListener("resize",kb); visualViewport.addEventListener("scroll",kb); }
 document.addEventListener("change",e=>{ if(e.target.id==="schedDate"){ S.schedDate=e.target.value||null; renderSchedHead(); renderSchedList(); } });
 ["gesturestart","gesturechange","gestureend"].forEach(t=>document.addEventListener(t,e=>e.preventDefault()));
 { const _rs=renderSheet; renderSheet=function(){ _rs.apply(this,arguments); if(!desktop()&&S.sheet!=="peek"&&!S.pinMode) setSheet(S.sheet); }; }
