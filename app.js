@@ -277,14 +277,30 @@ function renderFrom(head,body,foot){
     <div class="row2 frombtns"><button class="btn" type="button" data-act="locate">${svg("plane")}Определить меня</button><button class="btn sec" type="button" data-act="manual">${svg("pin")}Выбрать на карте</button></div>`;
   foot.hidden=true;
 }
+const ADDR_AB={"ул":"улица","ул.":"улица","улица":"улица","пр-т":"проспект","пр-т.":"проспект","просп.":"проспект","проспект":"проспект","пер":"переулок","пер.":"переулок","переулок":"переулок","пл":"площадь","пл.":"площадь","ш":"шоссе","ш.":"шоссе"};
+/* «ногинск, ул юбилейная д 9» → «улица юбилейная 9, ногинск» (так геокодер находит дом) */
+function normAddr(q){
+  const fix=x=>x.split(/\s+/).filter(w=>!/^(г|г\.|д|д\.|дом|дом\.)$/i.test(w)).map(w=>ADDR_AB[w.toLowerCase()]||w.replace(/^д\.?(?=\d)/i,"")).join(" ").trim();
+  const p=q.split(/[,;]+/).map(fix).filter(Boolean).reduce((a,x)=>{ if(a.length&&/^\d+\S*$/.test(x)) a[a.length-1]+=" "+x; else a.push(x); return a; },[]), i=p.findIndex(x=>/\d/.test(x));
+  return (p.length>1&&i>0?[...p.slice(i),...p.slice(0,i)]:p).join(", ");
+}
+async function nominatim(q,bounded){
+  const b=CFG.searchBounds;
+  const url="https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ru&viewbox="+[b[0][1],b[1][0],b[1][1],b[0][0]].join(",")+(bounded?"&bounded=1":"")+"&q="+encodeURIComponent(q);
+  return await(await fetch(url)).json();
+}
 async function addrSearch(q){
   q=q.trim(); if(!$("addrRes")) return; if(q.length<3){ $("addrRes").innerHTML=""; return; }
-  const tok=++addrTok, b=CFG.searchBounds; $("addrRes").innerHTML='<li class="empty">Ищем…</li>'; let list=[];
-  try{ list=await(await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ru&bounded=1&viewbox="+[b[0][1],b[1][0],b[1][1],b[0][0]].join(",")+"&q="+encodeURIComponent(q))).json(); }
-  catch(e){ if(tok===addrTok&&$("addrRes")) $("addrRes").innerHTML='<li class="empty">Не удалось выполнить поиск. Проверьте интернет</li>'; return; }
+  const tok=++addrTok, nq=normAddr(q); $("addrRes").innerHTML='<li class="empty">Ищем…</li>'; let list=[];
+  try{
+    list=await nominatim(nq,true);
+    if(!list.length) list=await nominatim(nq,false);
+    if(!list.length&&/\d/.test(nq)){ const noNum=nq.split(",").map(x=>x.replace(/\s+\d+\S*$/,"").trim()).join(", "); list=await nominatim(noNum,true); }
+  }catch(e){ if(tok===addrTok&&$("addrRes")) $("addrRes").innerHTML='<li class="empty">Не удалось выполнить поиск. Проверьте интернет</li>'; return; }
   if(tok!==addrTok||!$("addrRes")) return;
+  const R=CFG.searchBounds; list=list.filter(x=>+x.lat>=R[0][0]-.3&&+x.lat<=R[1][0]+.3&&+x.lon>=R[0][1]-.3&&+x.lon<=R[1][1]+.3);
   ADDR=list.map(x=>({lat:+x.lat,lon:+x.lon,name:String(x.display_name).split(",").slice(0,3).join(",").trim()}));
-  $("addrRes").innerHTML=ADDR.map((a,i)=>`<li><button type="button" data-act="pick-addr" data-i="${i}"><span class="n">${esc(a.name)}</span></button></li>`).join("")||'<li class="empty">Ничего не нашли. Уточните адрес</li>';
+  $("addrRes").innerHTML=ADDR.map((a,i)=>`<li><button type="button" data-act="pick-addr" data-i="${i}"><span class="n">${esc(a.name)}</span></button></li>`).join("")||'<li class="empty">Ничего не нашли. Попробуйте так: город, улица, дом</li>';
 }
 document.addEventListener("input",e=>{ if(e.target.id==="addrQ"){ clearTimeout(addrT); const v=e.target.value; addrT=setTimeout(()=>addrSearch(v),600); } });
 document.addEventListener("keydown",e=>{ if(e.target.id==="addrQ"&&e.key==="Enter"){ clearTimeout(addrT); addrSearch(e.target.value); } });
