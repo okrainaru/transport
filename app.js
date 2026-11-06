@@ -267,6 +267,12 @@ function nearbyList(){
   return raw.slice(0,14).map(x=>{ const w=wm(x.name,x.h); return {name:x.name,d:w.m,min:w.min}; }).sort((a,b)=>a.d-b.d)
     .filter(x=>{ const t=stopByName[x.name]; if(t.twin==null) return true; if(seen.has(t.twin)) return false; seen.add(t.twin); return true; }).slice(0,10);
 }
+let KB=false;
+function kbLayout(){
+  const sh=$("sheet"), v=window.visualViewport;
+  if(!KB||!v||desktop()){ sh.classList.remove("kb"); sh.style.top=""; sh.style.height=""; return; }
+  sh.classList.add("kb"); sh.style.top=(v.offsetTop+8)+"px"; sh.style.height=Math.max(220,Math.round(v.height-16))+"px";
+}
 let NEAR=[], ADDR=[], addrTok=0, addrT=null;
 function openFrom(){
   if(S.view!=="from") S.fromPrev=S.view; S.pinMode=false; placePin(); S.view="from";
@@ -281,7 +287,8 @@ function renderFrom(head,body,foot){
   const inp=$("addrQ");
   inp.addEventListener("input",()=>{ clearTimeout(addrT); const v=inp.value; if(v.trim().length>=3&&$("addrRes")) $("addrRes").innerHTML='<li class="empty">Ищем…</li>'; addrT=setTimeout(()=>addrSearch(v),450); });
   inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ clearTimeout(addrT); addrSearch(inp.value); } });
-  inp.addEventListener("focus",()=>{ if(!desktop()) setSheet("full"); });
+  inp.addEventListener("focus",()=>{ if(!desktop()){ KB=true; kbLayout(); } });
+  inp.addEventListener("blur",()=>setTimeout(()=>{ if(document.activeElement!==inp){ KB=false; kbLayout(); } },250));
   if(desktop()) setTimeout(()=>inp.focus(),60);
 }
 const ADDR_AB={"ул":"улица","ул.":"улица","улица":"улица","пр-т":"проспект","пр-т.":"проспект","просп.":"проспект","проспект":"проспект","пер":"переулок","пер.":"переулок","переулок":"переулок","пл":"площадь","пл.":"площадь","ш":"шоссе","ш.":"шоссе"};
@@ -293,21 +300,32 @@ function normAddr(q){
 }
 async function nominatim(q,bounded){
   const b=CFG.searchBounds;
-  const url="https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ru&viewbox="+[b[0][1],b[1][0],b[1][1],b[0][0]].join(",")+(bounded?"&bounded=1":"")+"&q="+encodeURIComponent(q);
-  return await(await fetch(url)).json();
+  return await(await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ru&viewbox="+[b[0][1],b[1][0],b[1][1],b[0][0]].join(",")+(bounded?"&bounded=1":"")+"&q="+encodeURIComponent(q))).json();
 }
+/* Photon (OpenStreetMap): подсказки и поиск с опечатками */
+async function photon(q){
+  const b=CFG.searchBounds, c=regionCenter();
+  const j=await(await fetch("https://photon.komoot.io/api/?limit=8&lat="+c.lat+"&lon="+c.lon+"&bbox="+[b[0][1],b[0][0],b[1][1],b[1][0]].join(",")+"&q="+encodeURIComponent(q))).json();
+  return (j.features||[]).map(f=>{ const p=f.properties||{}, st=p.street?p.street+(p.housenumber?" "+p.housenumber:""):(p.name||"");
+    return {lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0],name:[st,p.city||p.town||p.village||p.district||""].filter(Boolean).join(", ")}; });
+}
+/* «3 интернационала» → «3-го интернационала» (так названы улицы) */
+const ordVariant=t=>t.replace(/(^|\s)(\d{1,2})\s+(?=[^\d\s]{5,})/g,"$1$2-го ");
 async function addrSearch(q){
   q=q.trim(); if(!$("addrRes")) return; if(q.length<3){ $("addrRes").innerHTML=""; return; }
-  const tok=++addrTok, nq=normAddr(q); $("addrRes").innerHTML='<li class="empty">Ищем…</li>'; let list=[];
-  try{
-    list=await nominatim(nq,true);
-    if(!list.length) list=await nominatim(nq,false);
-    if(!list.length&&/\d/.test(nq)){ const noNum=nq.split(",").map(x=>x.replace(/\s+\d+\S*$/,"").trim()).join(", "); list=await nominatim(noNum,true); }
-  }catch(e){ if(tok===addrTok&&$("addrRes")) $("addrRes").innerHTML='<li class="empty">Не удалось выполнить поиск. Проверьте интернет</li>'; return; }
+  const tok=++addrTok, nq=normAddr(q), flat=nq.replace(/,/g," ").replace(/\s+/g," "); $("addrRes").innerHTML='<li class="empty">Ищем…</li>'; let out=[];
+  const R=CFG.searchBounds, inR=a=>a.lat>=R[0][0]-.3&&a.lat<=R[1][0]+.3&&a.lon>=R[0][1]-.3&&a.lon<=R[1][1]+.3;
+  const add=l=>{ for(const a of l){ if(inR(a)&&!out.some(o=>o.name===a.name&&Math.abs(o.lat-a.lat)<1e-4)) out.push(a); } };
+  const nom=l=>l.map(x=>({lat:+x.lat,lon:+x.lon,name:String(x.display_name).split(",").slice(0,3).join(",").trim()}));
+  let failed=0;
+  const tryRun=async f=>{ try{ add(await f()); }catch(e){ failed++; } };
+  await tryRun(()=>photon(flat));
+  if(tok===addrTok&&ordVariant(flat)!==flat&&out.length<3) await tryRun(()=>photon(ordVariant(flat)));
+  if(tok===addrTok&&!out.length){ await tryRun(async()=>nom(await nominatim(nq,true))); if(!out.length) await tryRun(async()=>nom(await nominatim(ordVariant(nq),true))); }
+  if(tok===addrTok&&!out.length&&/\d/.test(flat)){ const noNum=flat.replace(/\s+\d+\S*$/,""); await tryRun(()=>photon(noNum)); }
   if(tok!==addrTok||!$("addrRes")) return;
-  const R=CFG.searchBounds; list=list.filter(x=>+x.lat>=R[0][0]-.3&&+x.lat<=R[1][0]+.3&&+x.lon>=R[0][1]-.3&&+x.lon<=R[1][1]+.3);
-  ADDR=list.map(x=>({lat:+x.lat,lon:+x.lon,name:String(x.display_name).split(",").slice(0,3).join(",").trim()}));
-  $("addrRes").innerHTML=ADDR.map((a,i)=>`<li><button type="button" data-act="pick-addr" data-i="${i}"><span class="n">${esc(a.name)}</span></button></li>`).join("")||'<li class="empty">Ничего не нашли. Попробуйте так: город, улица, дом</li>';
+  ADDR=out.slice(0,7);
+  $("addrRes").innerHTML=ADDR.map((a,i)=>`<li><button type="button" data-act="pick-addr" data-i="${i}"><span class="n">${esc(a.name)}</span></button></li>`).join("")||`<li class="empty">${failed>=2?"Не удалось выполнить поиск. Проверьте интернет":"Ничего не нашли. Попробуйте: город, улица, дом"}</li>`;
 }
 
 function renderNearby(head,body,foot){
@@ -659,7 +677,7 @@ function autoH(){
   sh.dataset.state=prev; return Math.max(260,Math.min(H-122,h+6));
 }
 function sheetHeights(){ const a=autoH(); const vh=window.visualViewport?visualViewport.height:0, cap=vh?Math.round(vh-96):1e5;
-  return {peek:Math.max(132,Math.round((($("mapView").clientHeight)||600)*.2)), half:Math.min(cap,Math.round((($("mapView").clientHeight)||600)*.52)), full:Math.min(cap,($("mapView").clientHeight||600)-122)}; }
+  return {peek:Math.max(132,Math.round((($("mapView").clientHeight)||600)*.2)), half:Math.min(cap,Math.round((($("mapView").clientHeight)||600)*.52)), full:Math.min(cap,S.view==="from"?Math.round((($("mapView").clientHeight)||600)*.52):(($("mapView").clientHeight||600)-122))}; }
 function setSheet(state){
   if(desktop()) state="half";
   S.sheet=state; if(state!=="full"){ const b=$("sheetBody"); if(b) b.scrollTop=0; } const el=$("sheet"); el.dataset.state=state;
@@ -1000,10 +1018,10 @@ if(!EDIT && navigator.permissions && navigator.permissions.query){
   }).catch(()=>{});
 }
 document.addEventListener("touchmove",e=>{ if(e.touches.length>1&&!e.target.closest("#map")) e.preventDefault(); },{passive:false});
-if(window.visualViewport){ const kb=()=>{ const v=visualViewport; document.documentElement.style.setProperty("--kb",Math.max(0,Math.round(window.innerHeight-v.height-v.offsetTop))+"px"); if(S.sheet!=="peek") setSheet(S.sheet); }; visualViewport.addEventListener("resize",kb); visualViewport.addEventListener("scroll",kb); }
+if(window.visualViewport){ const kb=()=>{ const v=visualViewport; document.documentElement.style.setProperty("--kb",Math.max(0,Math.round(window.innerHeight-v.height-v.offsetTop))+"px"); kbLayout(); if(S.sheet!=="peek"&&!KB) setSheet(S.sheet); }; visualViewport.addEventListener("resize",kb); visualViewport.addEventListener("scroll",kb); }
 document.addEventListener("change",e=>{ if(e.target.id==="schedDate"){ S.schedDate=e.target.value||null; renderSchedHead(); renderSchedList(); } });
 ["gesturestart","gesturechange","gestureend"].forEach(t=>document.addEventListener(t,e=>e.preventDefault()));
-{ const _rs=renderSheet; renderSheet=function(){ _rs.apply(this,arguments); if(!desktop()&&S.sheet!=="peek"&&!S.pinMode) setSheet(S.sheet); }; }
+{ const _rs=renderSheet; renderSheet=function(){ _rs.apply(this,arguments); if(S.view!=="from"&&KB){ KB=false; kbLayout(); } if(!desktop()&&S.sheet!=="peek"&&!S.pinMode) setSheet(S.sheet); }; }
 document.addEventListener("toggle",e=>{ const d=e.target; if(d&&d.matches&&d.matches("details.path")){ S.pathOpen=d.open?d.dataset.pk:null; if(!desktop()&&S.sheet!=="peek") setSheet(S.sheet); } },true);
 function softRender(){
   const b=$("sheetBody"), top=b.scrollTop, det=b.querySelector("details.path"), wasOpen=det&&det.open;
