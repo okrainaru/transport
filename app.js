@@ -267,11 +267,20 @@ function nearbyList(){
   return raw.slice(0,14).map(x=>{ const w=wm(x.name,x.h); return {name:x.name,d:w.m,min:w.min}; }).sort((a,b)=>a.d-b.d)
     .filter(x=>{ const t=stopByName[x.name]; if(t.twin==null) return true; if(seen.has(t.twin)) return false; seen.add(t.twin); return true; }).slice(0,10);
 }
-let KB=false;
+let KB=false, kbT=null;
 function kbLayout(){
   const sh=$("sheet"), v=window.visualViewport;
-  if(!KB||!v||desktop()){ sh.classList.remove("kb"); sh.style.top=""; sh.style.height=""; return; }
-  sh.classList.add("kb"); sh.style.top=(v.offsetTop+8)+"px"; sh.style.height=Math.max(220,Math.round(v.height-16))+"px";
+  if(KB&&v&&!desktop()){            // над клавиатурой: нижний край ровно по верхнему краю клавиатуры
+    clearTimeout(kbT); sh.style.transition="none"; sh.classList.add("kb");
+    sh.style.top=(v.offsetTop+8)+"px"; sh.style.height=Math.max(220,Math.round(v.height-6))+"px"; return;
+  }
+  if(!sh.classList.contains("kb")) return;
+  const t=sh.style.top, h=sh.style.height;                                 // плавно вернуться на своё место
+  sh.classList.remove("kb"); sh.style.top=""; sh.style.height=""; sh.style.transition="none";
+  const r=sh.getBoundingClientRect();
+  sh.classList.add("kb"); sh.style.top=t; sh.style.height=h; void sh.offsetHeight;
+  sh.style.transition="top .28s ease,height .28s ease"; sh.style.top=r.top+"px"; sh.style.height=r.height+"px";
+  clearTimeout(kbT); kbT=setTimeout(()=>{ sh.classList.remove("kb"); sh.style.top=""; sh.style.height=""; sh.style.transition=""; },300);
 }
 let NEAR=[], ADDR=[], addrTok=0, addrT=null;
 function openFrom(){
@@ -288,7 +297,7 @@ function renderFrom(head,body,foot){
   inp.addEventListener("input",()=>{ clearTimeout(addrT); const v=inp.value; if(v.trim().length>=3&&$("addrRes")) $("addrRes").innerHTML='<li class="empty">Ищем…</li>'; addrT=setTimeout(()=>addrSearch(v),450); });
   inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ clearTimeout(addrT); addrSearch(inp.value); } });
   inp.addEventListener("focus",()=>{ if(!desktop()){ KB=true; kbLayout(); } });
-  inp.addEventListener("blur",()=>setTimeout(()=>{ if(document.activeElement!==inp){ KB=false; kbLayout(); } },250));
+  inp.addEventListener("blur",()=>setTimeout(()=>{ if(document.activeElement!==inp){ KB=false; kbLayout(); } },90));
   if(desktop()) setTimeout(()=>inp.focus(),60);
 }
 const ADDR_AB={"ул":"улица","ул.":"улица","улица":"улица","пр-т":"проспект","пр-т.":"проспект","просп.":"проспект","проспект":"проспект","пер":"переулок","пер.":"переулок","переулок":"переулок","пл":"площадь","пл.":"площадь","ш":"шоссе","ш.":"шоссе"};
@@ -307,25 +316,32 @@ async function photon(q){
   const b=CFG.searchBounds, c=regionCenter();
   const j=await(await fetch("https://photon.komoot.io/api/?limit=8&lat="+c.lat+"&lon="+c.lon+"&bbox="+[b[0][1],b[0][0],b[1][1],b[1][0]].join(",")+"&q="+encodeURIComponent(q))).json();
   return (j.features||[]).map(f=>{ const p=f.properties||{}, st=p.street?p.street+(p.housenumber?" "+p.housenumber:""):(p.name||"");
-    return {lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0],name:[st,p.city||p.town||p.village||p.district||""].filter(Boolean).join(", ")}; });
+    return {lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0],house:!!p.housenumber,name:[st,p.city||p.town||p.village||p.district||""].filter(Boolean).join(", ")}; });
+}
+async function nomStruct(house,street,city){
+  const u="https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=ru&countrycodes=ru&street="+encodeURIComponent((house?house+" ":"")+street)+(city?"&city="+encodeURIComponent(city):"");
+  return (await(await fetch(u)).json()).map(x=>({lat:+x.lat,lon:+x.lon,house:!!(x.address&&x.address.house_number),name:String(x.display_name).split(",").slice(0,3).join(",").trim()}));
 }
 /* «3 интернационала» → «3-го интернационала» (так названы улицы) */
 const ordVariant=t=>t.replace(/(^|\s)(\d{1,2})\s+(?=[^\d\s]{5,})/g,"$1$2-го ");
+const CITY_RE=/^(ногинск|электросталь|электроугли|монино|кудиново|лосино-петровский|железнодорожный|балашиха|щелково|щёлково|черноголовка|павловский)$/i;
 async function addrSearch(q){
   q=q.trim(); if(!$("addrRes")) return; if(q.length<3){ $("addrRes").innerHTML=""; return; }
-  const tok=++addrTok, nq=normAddr(q), flat=nq.replace(/,/g," ").replace(/\s+/g," "); $("addrRes").innerHTML='<li class="empty">Ищем…</li>'; let out=[];
+  const tok=++addrTok, nq=normAddr(q), flat=nq.replace(/,/g," ").replace(/\s+/g," ").trim(); $("addrRes").innerHTML='<li class="empty">Ищем…</li>'; let out=[], failed=0;
+  const tk=flat.split(" "); let house="", city=""; if(tk.length>1&&/^\d+[а-яa-z]?(\/\d+)?$/i.test(tk[tk.length-1])) house=tk.pop(); if(tk.length>1&&CITY_RE.test(tk[0])) city=tk.shift(); const street=tk.join(" ");
   const R=CFG.searchBounds, inR=a=>a.lat>=R[0][0]-.3&&a.lat<=R[1][0]+.3&&a.lon>=R[0][1]-.3&&a.lon<=R[1][1]+.3;
   const add=l=>{ for(const a of l){ if(inR(a)&&!out.some(o=>o.name===a.name&&Math.abs(o.lat-a.lat)<1e-4)) out.push(a); } };
-  const nom=l=>l.map(x=>({lat:+x.lat,lon:+x.lon,name:String(x.display_name).split(",").slice(0,3).join(",").trim()}));
-  let failed=0;
-  const tryRun=async f=>{ try{ add(await f()); }catch(e){ failed++; } };
-  await tryRun(()=>photon(flat));
-  if(tok===addrTok&&ordVariant(flat)!==flat&&out.length<3) await tryRun(()=>photon(ordVariant(flat)));
-  if(tok===addrTok&&!out.length){ await tryRun(async()=>nom(await nominatim(nq,true))); if(!out.length) await tryRun(async()=>nom(await nominatim(ordVariant(nq),true))); }
-  if(tok===addrTok&&!out.length&&/\d/.test(flat)){ const noNum=flat.replace(/\s+\d+\S*$/,""); await tryRun(()=>photon(noNum)); }
+  const run=async f=>{ if(tok!==addrTok) return; try{ add(await f()); }catch(e){ failed++; } };
+  const hasH=()=>out.some(o=>o.house), ov=ordVariant(flat);
+  await run(()=>photon(flat));
+  if(house&&!hasH()&&ov!==flat) await run(()=>photon(ov));
+  if(house&&!hasH()) for(const st of [...new Set([street,ordVariant(street)])]){ await run(()=>nomStruct(house,st,city)); if(hasH()) break; }
+  if(!out.length){ await run(async()=>(await nominatim(nq,true)).map(x=>({lat:+x.lat,lon:+x.lon,name:String(x.display_name).split(",").slice(0,3).join(",").trim()}))); }
+  if(!out.length&&house) await run(()=>photon(flat.replace(/\s+\S+$/,"")));
   if(tok!==addrTok||!$("addrRes")) return;
+  if(house&&!hasH()) out.forEach(o=>o.approx=true); else out.sort((a,b)=>(b.house?1:0)-(a.house?1:0));
   ADDR=out.slice(0,7);
-  $("addrRes").innerHTML=ADDR.map((a,i)=>`<li><button type="button" data-act="pick-addr" data-i="${i}"><span class="n">${esc(a.name)}</span></button></li>`).join("")||`<li class="empty">${failed>=2?"Не удалось выполнить поиск. Проверьте интернет":"Ничего не нашли. Попробуйте: город, улица, дом"}</li>`;
+  $("addrRes").innerHTML=ADDR.map((a,i)=>`<li><button type="button" data-act="pick-addr" data-i="${i}"><span class="n">${esc(a.name)}${a.approx?'<em class="fast">дом не найден — уточните на карте</em>':""}</span></button></li>`).join("")||`<li class="empty">${failed>=2?"Не удалось выполнить поиск. Проверьте интернет":"Ничего не нашли. Попробуйте: город, улица, дом"}</li>`;
 }
 
 function renderNearby(head,body,foot){
@@ -890,7 +906,7 @@ document.addEventListener("click",e=>{
     case "nearby": if(S.user&&S.locWarn!=="far"){ S.view="nearby"; renderSheet(); drawMap({fit:"local"}); } else openFrom(); break;
     case "pick-near": { const x=NEAR[+el.dataset.i]; if(x){ if(!desktop()&&S.sheet==="peek") setSheet("half"); selectStop(x.name); } break; }
     case "from-back": S.view=S.fromPrev&&S.fromPrev!=="from"?S.fromPrev:"route"; if(S.view==="nearby"&&!(S.user&&S.locWarn!=="far")) S.view="route"; renderSheet(); drawMap({fit:"local"}); break;
-    case "pick-addr": { const a=ADDR[+el.dataset.i]; if(a){ S.view="nearby"; setManual({lat:a.lat,lng:a.lon},false); } break; }
+    case "pick-addr": { const a=ADDR[+el.dataset.i]; if(a){ S.view="nearby"; if(a.approx){ setManual({lat:a.lat,lng:a.lon},true); startManual(); } else setManual({lat:a.lat,lng:a.lon},false); } break; }
     case "pin-back": S.pinMode=false; placePin(); openFrom(); break;
     case "toggle-dest": setDest(S.dest===ENT?RC:ENT); break;
     case "zoom": if(MAP.ready){ const m=MAP.map; m.flyTo(m.getCenter(),Math.max(m.getMinZoom(),Math.min(m.getMaxZoom(),m.getZoom()+(+v>0?1:-1))),{duration:.6,easeLinearity:.25}); } break;

@@ -402,5 +402,5 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 .sheet label.search{display:flex;align-items:center;gap:10px;height:52px;padding:0 14px;margin:6px 0 10px;background:var(--raised);border:1px solid var(--line);border-radius:14px}
 .sheet label.search input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--ink);font-size:16px}
 .sheet label.search svg{width:20px;height:20px;flex:none;color:var(--mute)}
-.sheet.kb{position:fixed!important;left:0;right:0;bottom:auto!important;margin-bottom:0!important;z-index:900;transition:none!important}
+.sheet.kb{position:fixed!important;left:0;right:0;bottom:auto!important;margin-bottom:0!important;z-index:900;border-bottom-left-radius:0;border-bottom-right-radius:0}
 .sheet.kb .body{overflow-y:auto!important}
