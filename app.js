@@ -341,7 +341,7 @@ async function addrSearch(q){
   if(tok!==addrTok||!$("addrRes")) return;
   if(house&&!hasH()) out.forEach(o=>o.approx=true); else out.sort((a,b)=>(b.house?1:0)-(a.house?1:0));
   ADDR=out.slice(0,7);
-  $("addrRes").innerHTML=ADDR.map((a,i)=>`<li><button type="button" data-act="pick-addr" data-i="${i}"><span class="n">${esc(a.name)}${a.approx?'<em class="fast">дом не найден — уточните на карте</em>':""}</span></button></li>`).join("")||`<li class="empty">${failed>=2?"Не удалось выполнить поиск. Проверьте интернет":"Ничего не нашли. Попробуйте: город, улица, дом"}</li>`;
+  $("addrRes").innerHTML=ADDR.map((a,i)=>`<li><button type="button" data-act="pick-addr" data-i="${i}"><span class="n">${esc(a.name)}${a.approx?'<em class="fast">дом не найден, уточните на карте</em>':""}</span></button></li>`).join("")||`<li class="empty">${failed>=2?"Не удалось выполнить поиск. Проверьте интернет":"Ничего не нашли. Попробуйте: город, улица, дом"}</li>`;
 }
 
 function renderNearby(head,body,foot){
@@ -375,7 +375,7 @@ function renderSheet(){
   let html="";
   if(S.locating && !S.user) html+=`<div class="notice"><b>Определяем местоположение…</b><span class="mute">Разрешите доступ, если появится запрос.</span></div>`;
   if(S.locErr){
-    const msg={denied:"Нет доступа к местоположению. Разрешите его в настройках приложения или браузера — или укажите точку на карте.",
+    const msg={denied:"Нет доступа к местоположению. Разрешите его в настройках приложения или браузера либо укажите точку на карте.",
       timeout:"Не удалось определить местоположение вовремя. Выйдите на открытое место или укажите точку на карте.",
       unavailable:"Местоположение сейчас недоступно. Включите GPS или укажите точку на карте.",
       unsupported:"В этом приложении местоположение недоступно. Укажите точку на карте."}[S.locErr]||"Местоположение недоступно.";
@@ -385,7 +385,7 @@ function renderSheet(){
   if(S.user && S.locWarn){
     const far = S.locWarn==="far";
     html+=`<div class="notice warn"><b>${far?"Вы далеко от маршрутов":"Местоположение неточное"}</b>
-      <span>${far?"Точка определена за пределами района рейсов. Если включён VPN, слабый GPS или Wi-Fi, местоположение могло определиться неверно. ":`Точность около ${fmtDist(S.user.acc)}. `}Укажите, где вы находитесь, на карте — расчёт будет точнее.</span>
+      <span>${far?"Точка определена за пределами района рейсов. Если включён VPN, слабый GPS или Wi-Fi, местоположение могло определиться неверно. ":`Точность около ${fmtDist(S.user.acc)}. `}Укажите, где вы находитесь, на карте. Расчёт станет точнее.</span>
       <button class="btn" type="button" data-act="manual">${svg("pin")}Указать на карте</button>
       <button class="btn sec" type="button" data-act="locate">${svg("locate")}Определить снова</button></div>`;
   }
@@ -459,7 +459,7 @@ function timelineHTML(plan,pr,dist){
     if(li>0) pathItems.push(`<li><time></time><span class="dm">пересадка в ${esc(sel.xfer)}</span></li>`);
     for(let k=leg.i;k<=leg.j;k++){
       const s=leg.trip.stops[k];
-      pathItems.push(`<li><time class="${s.kind==="approx"?"ap":""}">${s.time?(s.kind==="approx"?"":"")+s.time:"—"}</time><span>${esc(ql(s.stop))}${s.time?"":` <span class="dm">· по требованию</span>`}</span></li>`);
+      pathItems.push(`<li><time class="${s.kind==="approx"?"ap":""}">${s.time?s.time:""}</time><span>${esc(ql(s.stop))}${s.time?"":` <span class="dm">· по требованию</span>`}</span></li>`);
     }
   });
   const inBetween = sel.legs.reduce((n,l)=>n+(l.j-l.i-1),0);
@@ -478,7 +478,7 @@ function timelineHTML(plan,pr,dist){
     const l1=sel.legs[0], l2=sel.legs[1];
     const wait = (l1.arr&&l2.dep)?toMin(l2.dep)-toMin(l1.arr):null;
     xferNode=`<li class="node${rcOf(l2)?" rcl":""}"><div class="rail"><div class="ico xfer">${svg("swap")}</div></div><div>
-      <h3>Пересадка: ${esc(sel.xfer)}</h3><div class="sub">${l1.arr||"?"} → ${l2.dep||"?"}${wait!=null?` · ждать ${human(wait)}`:""} · автобус <span class="badge b${l2.trip.route}" style="height:20px;min-width:34px;font-size:12px">${l2.trip.route}</span></div></div></li>`;
+      <h3>Пересадка: ${esc(sel.xfer)}</h3><div class="sub">приезд ${l1.arr||"?"}, отправление ${l2.dep||"?"}${wait!=null?` · ждать ${human(wait)}`:""} · автобус <span class="badge b${l2.trip.route}">${l2.trip.route}</span></div></div></li>`;
   }
 
   /* «Моё местоположение» + пешком / на машине */
@@ -1008,7 +1008,7 @@ function renderEdit(){
       <button class="btn sec" type="button" id="copyBtn">4a. Копировать координаты</button>
       <button class="btn sec" type="button" id="copyGeoBtn">4b. Копировать линии</button></div>
     <p class="notice" id="editStatus" role="status">${esc(EDIT_STATUS||"Перетащите метки на карте, если они стоят неточно.")}</p>
-    ${miss.length?`<div class="notice warn"><b>Без координат — нажмите и затем кликните по карте:</b>${miss.map(s=>`<button class="btn sec" type="button" data-act="edit-pick" data-name="${esc(s.name)}">${esc(s.name)}</button>`).join("")}</div>`:""}`;
+    ${miss.length?`<div class="notice warn"><b>Без координат. Нажмите на название, затем кликните по карте:</b>${miss.map(s=>`<button class="btn sec" type="button" data-act="edit-pick" data-name="${esc(s.name)}">${esc(s.name)}</button>`).join("")}</div>`:""}`;
   const st=t=>{ EDIT_STATUS=t; const e=$("editStatus"); if(e) e.textContent=t; };
   $("geoBtn").onclick=async()=>{ $("geoBtn").disabled=true; await geocodeMissing((i,n)=>st(`Ищу координаты: ${i} из ${n}`)); st("Готово. Проверьте метки на карте."); drawMap({fit:"all"}); renderEdit(); };
   $("roadBtn").onclick=async()=>{ $("roadBtn").disabled=true; const r=await buildRoadGeometry((i,n,f)=>st(`Строю линии: ${i} из ${n}${f?`, не удалось: ${f}`:""}`)); st(`Готово: ${r.total-r.fail} из ${r.total}.`); renderEdit(); };
