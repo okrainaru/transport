@@ -575,11 +575,6 @@ function applyWhen(){
 }
 
 let PICK_LIST=[];
-function openFrom(){
-  openModal("Откуда вы едете?",`<div class="row2" style="margin:0 0 10px"><button class="btn" type="button" data-act="locate-close">${svg("plane")}Определить меня</button><button class="btn sec" type="button" data-act="manual-close">${svg("pin")}Выбрать на карте</button></div><label class="search" style="margin:0 0 4px;background:var(--raised)">${svg("search")}<input id="stopQ" type="search" placeholder="Название остановки" autocomplete="off"></label><ul class="stoplist" id="stopList"></ul>`,()=>{
-    renderStopList(""); const i=$("stopQ"); i.addEventListener("input",()=>renderStopList(i.value)); if(!desktop()) setTimeout(()=>i.focus(),80);
-  });
-}
 function renderStopList(q){
   q=q.trim().toLowerCase();
   let list=[...SERVED[S.dest][S.dir]].map(n=>({n,d:S.user&&hasXY(stopByName[n])?haversine(S.user,stopByName[n]):null}));
@@ -644,7 +639,7 @@ function startManual(){
   const rc=regionCenter(), far=!S.user||S.locWarn==="far", mc=MAP.ready?MAP.map.getCenter():null;
   const c=!far?{lat:S.user.lat,lng:S.user.lon}:(mc&&L.latLngBounds(CFG.searchBounds).contains(mc))?{lat:mc.lat,lng:mc.lng}:{lat:rc.lat,lng:rc.lon};
   setManual({lat:c.lat,lng:c.lng},true);
-  if(MAP.ready){ const q=MAP.pad(); MAP.map.setView([c.lat,c.lng],Math.max(MAP.map.getZoom(),16),{animate:false}); MAP.map.panBy([-(q.tl[0]-q.br[0])/2,-(q.tl[1]-q.br[1])/2],{animate:false}); }
+  if(MAP.ready){ const q=MAP.pad(); MAP.map.setView([c.lat,c.lng],Math.min(15.5,Math.max(14,MAP.map.getZoom())),{animate:false}); MAP.map.panBy([-(q.tl[0]-q.br[0])/2,-(q.tl[1]-q.br[1])/2],{animate:false}); }
   S.pinMode=true; placePin(); pinSync(); renderTop();
 }
 function setManual(ll,quiet){
@@ -744,7 +739,12 @@ const MAP = {
     if(!this.ready||!points.length) return;
     const p=this.pad();
     if(points.length===1){ this.map.setView(points[0],Math.min(maxZoom,16),{animate:false}); this.map.panBy([0,Math.round((p.br[1]-p.tl[1])/2)],{animate:false}); return; }
-    this.map.fitBounds(L.latLngBounds(points),{paddingTopLeft:p.tl,paddingBottomRight:p.br,maxZoom,animate:false});
+    let b=L.latLngBounds(points);
+    if(this.map.getBoundsZoom(b,false,L.point(p.tl[0]+p.br[0],p.tl[1]+p.br[1]))<12.5){   // слишком далеко: показываем окрестность остановки
+      const st=S.stop&&stopByName[S.stop], an=hasXY(st)?{lat:st.lat,lon:st.lon}:{lat:points[0][0],lon:points[0][1]};
+      const near=points.filter(q=>haversine(an,{lat:q[0],lon:q[1]})<9000); if(near.length) b=L.latLngBounds(near);
+    }
+    this.map.fitBounds(b,{paddingTopLeft:p.tl,paddingBottomRight:p.br,maxZoom:Math.min(maxZoom,16),animate:false});
   }
 };
 const rcOf=leg=>!!leg&&(leg.trip.stops[leg.i].stop===RC||leg.trip.stops[leg.j].stop===RC);

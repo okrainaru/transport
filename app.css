@@ -395,3 +395,5 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 .stoplist.near .fast{margin-left:0}
 .stoplist.near .d{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:var(--mute);flex:none}
 .stoplist.near .d svg{width:16px;height:16px}
+
+@media (min-width:860px){.pinbar{display:none!important}}
