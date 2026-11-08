@@ -79,7 +79,7 @@ function toast(msg,ms=4200){ const t=$("toast"); t.textContent=msg; t.hidden=fal
    ============================================================ */
 const S = {
   tab:"map", dest:store.get("bus.dest",ENT), dir:"to", stop:store.get("bus.stop",null), stopManual:store.get("bus.stopManual",false),
-  ride:null, view:"route", mode:store.get("bus.mode","walk"), user:null, locating:false, locErr:null, locWarn:null, picking:false,
+  ride:null, view:store.get("bus.stop",null)?"route":"from", mode:store.get("bus.mode","walk"), user:null, locating:false, locErr:null, locWarn:null, picking:false,
   when:null, sheet:"half", theme:store.get("bus.theme","auto"),
   schedRoute:"all", schedDay:null, q:"", open:new Set(), editPick:null
 };
@@ -250,7 +250,7 @@ function autoPickStop(){
 }
 function plantNote(){
   const t=stopByName[S.dest]; if(!S.user||!hasXY(t)||S.locWarn==="far") return "";
-  const d=haversine(S.user,t); return d<=1500?`<div class="notice"><b>${S.dest===ENT?"Завод":"РЦ"} рядом:</b> пешком ${walkMin(d)} мин (${fmtDist(d)}). Автобус не нужен.</div>`:"";
+  const d=haversine(S.user,t); return d<=1500?`<div class="notice"><b>${S.dest===ENT?"Завод":"РЦ"} рядом:</b> пешком ≈${walkMin(d)} мин (${fmtDist(d)}). Автобус не нужен.</div>`:"";
 }
 
 /* ============================================================
@@ -288,13 +288,13 @@ function openFrom(){
   if(!desktop()&&S.sheet==="peek") setSheet("half"); renderTop(); renderSheet(); drawMap({});
 }
 function renderFrom(head,body,foot){
-  head.innerHTML=`<div class="trow"><button class="backbtn" type="button" data-act="from-back" aria-label="Назад">${svg("back")}</button><div class="titlebtn"><span class="t"><h2>Откуда вы едете?</h2></span></div></div>`;
+  head.innerHTML=`<div class="trow">${S.stop||S.user?`<button class="backbtn" type="button" data-act="from-back" aria-label="Назад">${svg("back")}</button>`:""}<div class="titlebtn"><span class="t"><h2>Откуда вы едете?</h2></span></div></div>`;
   body.innerHTML=`<label class="search">${svg("search")}<input id="addrQ" type="search" placeholder="Введите адрес" autocomplete="off" enterkeyhint="search"></label>
     <ul class="stoplist addr" id="addrRes"></ul>
     <div class="row2 frombtns"><button class="btn" type="button" data-act="locate">${svg("plane")}Определить меня</button><button class="btn sec" type="button" data-act="manual">${svg("pin")}Выбрать на карте</button></div>`;
   foot.hidden=true;
   const inp=$("addrQ");
-  inp.addEventListener("input",()=>{ clearTimeout(addrT); const v=inp.value; if(v.trim().length>=3&&$("addrRes")) $("addrRes").innerHTML='<li class="empty">Ищем…</li>'; addrT=setTimeout(()=>addrSearch(v),450); });
+  inp.addEventListener("input",()=>{ clearTimeout(addrT); const v=inp.value; STOPRES=stopMatches(v); if($("addrRes")) $("addrRes").innerHTML=stopsBlock()+(v.trim().length>=3?'<li class="empty">Ищем…</li>':""); addrT=setTimeout(()=>{ if(v.trim().length>=3) addrSearch(v); },450); });
   inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ clearTimeout(addrT); addrSearch(inp.value); } });
   inp.addEventListener("focus",()=>{ if(!desktop()){ KB=true; kbLayout(); } });
   inp.addEventListener("blur",()=>setTimeout(()=>{ if(document.activeElement!==inp){ KB=false; kbLayout(); } },90));
@@ -325,9 +325,20 @@ async function nomStruct(house,street,city){
 /* «3 интернационала» → «3-го интернационала» (так названы улицы) */
 const ordVariant=t=>t.replace(/(^|\s)(\d{1,2})\s+(?=[^\d\s]{5,})/g,"$1$2-го ");
 const CITY_RE=/^(ногинск|электросталь|электроугли|монино|кудиново|лосино-петровский|железнодорожный|балашиха|щелково|щёлково|черноголовка|павловский)$/i;
+let STOPRES=[];
+function stopMatches(q){
+  const n=x=>String(x).toLowerCase().replace(/ё/g,"е"); q=n(q.trim()); if(q.length<2) return [];
+  const toks=q.split(/\s+/).filter(Boolean), seen=new Set(), out=[];
+  for(const st of D.stops){ const hay=n(lab(st.name)+" "+st.name); if(!toks.every(t=>hay.includes(t))) continue;
+    const r=resolveStop(st.name), t=stopByName[r]||st; if(DESTS.includes(r)) continue;
+    const key=t.twin!=null?"t"+t.twin:lab(r); if(seen.has(key)) continue; seen.add(key);
+    out.push({name:r,sc:(n(lab(r)).startsWith(toks[0])?0:1)+(SERVED[S.dest][S.dir].has(r)?0:2)}); }
+  return out.sort((a,b)=>a.sc-b.sc||lab(a.name).length-lab(b.name).length).slice(0,6);
+}
+const stopsBlock=()=>STOPRES.length?`<li class="grp">Остановки</li>`+STOPRES.map((x,i)=>`<li><button type="button" data-act="pick-stopres" data-i="${i}">${svg("bus")}<span class="n">${esc(lab(x.name))}</span></button></li>`).join(""):"";
 async function addrSearch(q){
-  q=q.trim(); if(!$("addrRes")) return; if(q.length<3){ $("addrRes").innerHTML=""; return; }
-  const tok=++addrTok, nq=normAddr(q), flat=nq.replace(/,/g," ").replace(/\s+/g," ").trim(); $("addrRes").innerHTML='<li class="empty">Ищем…</li>'; let out=[], failed=0;
+  q=q.trim(); if(!$("addrRes")) return; STOPRES=stopMatches(q); const shtml=stopsBlock(); if(q.length<3){ $("addrRes").innerHTML=shtml; return; }
+  const tok=++addrTok, nq=normAddr(q), flat=nq.replace(/,/g," ").replace(/\s+/g," ").trim(); $("addrRes").innerHTML=shtml+'<li class="empty">Ищем…</li>'; let out=[], failed=0;
   const tk=flat.split(" "); let house="", city=""; if(tk.length>1&&/^\d+[а-яa-z]?(\/\d+)?$/i.test(tk[tk.length-1])) house=tk.pop(); if(tk.length>1&&CITY_RE.test(tk[0])) city=tk.shift(); const street=tk.join(" ");
   const R=CFG.searchBounds, inR=a=>a.lat>=R[0][0]-.3&&a.lat<=R[1][0]+.3&&a.lon>=R[0][1]-.3&&a.lon<=R[1][1]+.3;
   const add=l=>{ for(const a of l){ if(inR(a)&&!out.some(o=>o.name===a.name&&Math.abs(o.lat-a.lat)<1e-4)) out.push(a); } };
@@ -341,7 +352,7 @@ async function addrSearch(q){
   if(tok!==addrTok||!$("addrRes")) return;
   if(house&&!hasH()) out.forEach(o=>o.approx=true); else out.sort((a,b)=>(b.house?1:0)-(a.house?1:0));
   ADDR=out.slice(0,7);
-  $("addrRes").innerHTML=ADDR.map((a,i)=>`<li><button type="button" data-act="pick-addr" data-i="${i}"><span class="n">${esc(a.name)}${a.approx?'<em class="fast">дом не найден, уточните на карте</em>':""}</span></button></li>`).join("")||`<li class="empty">${failed>=2?"Не удалось выполнить поиск. Проверьте интернет":"Ничего не нашли. Попробуйте: город, улица, дом"}</li>`;
+  $("addrRes").innerHTML=shtml+(ADDR.length&&shtml?`<li class="grp">Адреса</li>`:"")+ADDR.map((a,i)=>`<li><button type="button" data-act="pick-addr" data-i="${i}"><span class="n">${esc(a.name)}${a.approx?'<em class="fast">дом не найден — уточните на карте</em>':""}</span></button></li>`).join("")||(shtml?"":`<li class="empty">${failed>=2?"Не удалось выполнить поиск. Проверьте интернет":"Ничего не нашли. Попробуйте: город, улица, дом"}</li>`);
 }
 
 function renderNearby(head,body,foot){
@@ -375,7 +386,7 @@ function renderSheet(){
   let html="";
   if(S.locating && !S.user) html+=`<div class="notice"><b>Определяем местоположение…</b><span class="mute">Разрешите доступ, если появится запрос.</span></div>`;
   if(S.locErr){
-    const msg={denied:"Нет доступа к местоположению. Разрешите его в настройках приложения или браузера либо укажите точку на карте.",
+    const msg={denied:"Нет доступа к местоположению. Разрешите его в настройках приложения или браузера — или укажите точку на карте.",
       timeout:"Не удалось определить местоположение вовремя. Выйдите на открытое место или укажите точку на карте.",
       unavailable:"Местоположение сейчас недоступно. Включите GPS или укажите точку на карте.",
       unsupported:"В этом приложении местоположение недоступно. Укажите точку на карте."}[S.locErr]||"Местоположение недоступно.";
@@ -385,7 +396,7 @@ function renderSheet(){
   if(S.user && S.locWarn){
     const far = S.locWarn==="far";
     html+=`<div class="notice warn"><b>${far?"Вы далеко от маршрутов":"Местоположение неточное"}</b>
-      <span>${far?"Точка определена за пределами района рейсов. Если включён VPN, слабый GPS или Wi-Fi, местоположение могло определиться неверно. ":`Точность около ${fmtDist(S.user.acc)}. `}Укажите, где вы находитесь, на карте. Расчёт станет точнее.</span>
+      <span>${far?"Точка определена за пределами района рейсов. Если включён VPN, слабый GPS или Wi-Fi, местоположение могло определиться неверно. ":`Точность около ${fmtDist(S.user.acc)}. `}Укажите, где вы находитесь, на карте — расчёт будет точнее.</span>
       <button class="btn" type="button" data-act="manual">${svg("pin")}Указать на карте</button>
       <button class="btn sec" type="button" data-act="locate">${svg("locate")}Определить снова</button></div>`;
   }
@@ -446,25 +457,25 @@ function timelineHTML(plan,pr,dist){
   const tt = sel.trip;
   const rideCard = `<div class="ride">
     ${(()=>{ const t=[first?"Ближайший автобус":(pr.auto?"Ближайший, на который успеете":""),plan.offset>0?dayWord(plan.date,c.today):""].filter(Boolean).join(" · "); return t?`<div class="lbl">${t}</div>`:""; })()}
-    <div class="big"><span class="t">${sel.dep?sel.dep:tt.start}</span>${sel.dep?"":`<span class="dmq">по требованию</span>`}<span class="badge b${tt.route}">${tt.route}</span>${cd?`<span class="cd">${cd}</span>`:""}</div>
+    <div class="big"><span class="t">${sel.dep?(sel.kind==="approx"?"≈":"")+sel.dep:tt.start}</span>${sel.dep?"":`<span class="dmq">по требованию</span>`}<span class="badge b${tt.route}">${tt.route}</span>${cd?`<span class="cd">${cd}</span>`:""}</div>
     ${(()=>{ const m=[!sel.dep?"по требованию":"",sel.kind==="rc"?"для сотрудников РЦ":"",sel.note?esc(sel.note):"",sel.xfer?"с пересадкой":""].filter(Boolean).join(" · "); return m?`<div class="meta">${m}</div>`:""; })()}
     ${leaveBy}</div>`;
   /* остальные рейсы мелко */
   const others = plan.rides.map((r,i)=>({r,i})).filter(x=>x.i!==idx);
   const chips = others.length ? `<div class="others"><div class="lbl">${others.length===1?"Ещё один рейс":"Другие рейсы"}</div><div class="chips">${others.map(({r,i})=>
-    `<button type="button" class="rchip d${r.trip.route}${r.kind==="approx"?" ap":""}${r.dep?"":" dem"}" data-act="ride" data-i="${i}"><i class="dot"></i>${r.dep?r.dep:r.trip.start+" · по треб."}<span class="mute" style="font-weight:600">${r.trip.route}</span></button>`).join("")}</div></div>` : "";
+    `<button type="button" class="rchip d${r.trip.route}${r.kind==="approx"?" ap":""}${r.dep?"":" dem"}" data-act="ride" data-i="${i}"><i class="dot"></i>${r.dep?(r.kind==="approx"?"≈":"")+r.dep:r.trip.start+" · по треб."}<span class="mute" style="font-weight:600">${r.trip.route}</span></button>`).join("")}</div></div>` : "";
   /* остановки в пути */
   const pathItems=[];
   sel.legs.forEach((leg,li)=>{
     if(li>0) pathItems.push(`<li><time></time><span class="dm">пересадка в ${esc(sel.xfer)}</span></li>`);
-    for(let k=leg.i;k<=leg.j;k++){
+    for(let k=leg.i+1;k<leg.j;k++){
       const s=leg.trip.stops[k];
-      pathItems.push(`<li><time class="${s.kind==="approx"?"ap":""}">${s.time?s.time:""}</time><span>${esc(ql(s.stop))}${s.time?"":` <span class="dm">· по требованию</span>`}</span></li>`);
+      pathItems.push(`<li><time class="${s.kind==="approx"?"ap":""}">${s.time?(s.kind==="approx"?"≈":"")+s.time:"—"}</time><span>${esc(ql(s.stop))}${s.time?"":` <span class="dm">· по требованию</span>`}</span></li>`);
     }
   });
   const inBetween = sel.legs.reduce((n,l)=>n+(l.j-l.i-1),0);
   const pk=[S.stop,S.dir,S.dest,sel.legs.map(l=>l.trip.id).join("+"),sel.dep||""].join("|");
-  const path = `<details class="path" data-pk="${esc(pk)}"${S.pathOpen===pk?" open":""}><summary>Остановки в пути${inBetween>0?` (${inBetween})`:""}</summary><ul class="pathlist">${pathItems.join("")}</ul></details>`;
+  const path = (inBetween<=0&&!sel.xfer) ? "" : `<details class="path" data-pk="${esc(pk)}"${S.pathOpen===pk?" open":""}><summary>Остановки в пути${inBetween>0?` (${inBetween})`:""}</summary><ul class="pathlist">${pathItems.join("")}</ul></details>`;
 
   const boardNode = `<li class="node${rcOf(sel.legs[0])?" rcl":""}"><div class="rail"><div class="ico">${svg("bus")}</div></div><div>
       <h3>${esc(ql(boardName))}</h3><div class="sub">${to?"Посадка":"Отправление от "+(destName===ENT?"завода":"РЦ")}</div>${dayNote}${rideCard}${chips}${path}</div></li>`;
@@ -478,7 +489,7 @@ function timelineHTML(plan,pr,dist){
     const l1=sel.legs[0], l2=sel.legs[1];
     const wait = (l1.arr&&l2.dep)?toMin(l2.dep)-toMin(l1.arr):null;
     xferNode=`<li class="node${rcOf(l2)?" rcl":""}"><div class="rail"><div class="ico xfer">${svg("swap")}</div></div><div>
-      <h3>Пересадка: ${esc(sel.xfer)}</h3><div class="sub">приезд ${l1.arr||"?"}, отправление ${l2.dep||"?"}${wait!=null?` · ждать ${human(wait)}`:""} · автобус <span class="badge b${l2.trip.route}">${l2.trip.route}</span></div></div></li>`;
+      <h3>Пересадка: ${esc(sel.xfer)}</h3><div class="sub">${l1.arr||"?"} → ${l2.dep||"?"}${wait!=null?` · ждать ${human(wait)}`:""} · автобус <span class="badge b${l2.trip.route}" style="height:20px;min-width:34px;font-size:12px">${l2.trip.route}</span></div></div></li>`;
   }
 
   /* «Моё местоположение» + пешком / на машине */
@@ -569,7 +580,7 @@ function renderSchedList(){
           const ent=DESTS.includes(s.stop), hit=q&&s.stop.toLowerCase().includes(q), dem=!s.time;
           const notes=[]; if(s.time&&s.kind==="exact") notes.push("точное время"); if(s.kind==="rc"&&s.time) notes.push("для сотрудников РЦ"); if(dem) notes.push("при наличии пассажиров"); if(s.note) notes.push(s.note);
           return `<li class="${ent?"ent ":""}${hit?"hit ":""}${dem?"dem":""}"><button type="button" data-act="goto-stop" data-si="${STOP_IDX[s.stop]}">
-            <span class="tm ${s.kind==="approx"?"ap":""}${dem?" nn":""}">${dem?"по требо&shy;ванию":(s.kind==="approx"?"":"")+s.time}</span><span class="rl"><i></i></span>
+            <span class="tm ${s.kind==="approx"?"ap":""}${dem?" nn":""}">${dem?"по требо&shy;ванию":(s.kind==="approx"?"≈":"")+s.time}</span><span class="rl"><i></i></span>
             <span class="nm">${NUM[s.stop]?`<b class="sn">${NUM[s.stop]}</b>`:""}${esc(ql(s.stop))}${notes.length?`<em>${esc(notes.join(" · "))}</em>`:""}</span></button></li>`; }).join("")}</ol></div>`;
       }
       html+=`</div>`;
@@ -753,7 +764,7 @@ const MAP = {
     try{
       const map=this.map=L.map("map",{zoomControl:false,attributionControl:false,zoomSnap:0,zoomAnimationThreshold:8,minZoom:8,maxZoom:18,inertia:true,inertiaDeceleration:1700,inertiaMaxSpeed:2800,easeLinearity:.18,wheelDebounceTime:30,wheelPxPerZoomLevel:130,bounceAtZoomLimits:false,
         maxBounds:L.latLngBounds(CFG.searchBounds).pad(.6),maxBoundsViscosity:.8}).setView([55.83,38.35],10);
-      L.tileLayer(CFG.tileUrl,{maxZoom:19,detectRetina:true,updateWhenIdle:false,keepBuffer:4}).addTo(map);
+      L.tileLayer(CFG.tileUrl,{maxZoom:19,detectRetina:false,updateWhenIdle:false,keepBuffer:2}).addTo(map);
       for(const k of ["route","stops","walk","pins","user"]) this.g[k]=L.layerGroup().addTo(map);
       this.ready=true;
       if(EDIT||CFG.geocodeMissing){ const c=store.get("bus.coords.v1",{}); for(const s of D.stops) if(!hasXY(s)&&c[s.name]) Object.assign(s,c[s.name]); }
@@ -861,7 +872,7 @@ function drawMap(opts={}){
     if(opts.soft&&pts.length&&MAP.ready){ const bb=MAP.map.getBounds().pad(-0.04); if(pts.every(q=>bb.contains(q))) return;
       MAP.map.fitBounds(L.latLngBounds(pts),{padding:[40,40],maxZoom:MAP.map.getZoom(),animate:true}); return; }
     if(opts.fly&&pts.length>1){ const q=MAP.pad(), b=L.latLngBounds(pts), z=MAP.map.getBoundsZoom(b,false,L.point(q.tl[0]+q.br[0],q.tl[1]+q.br[1]));
-      let bb=b; if(z<12.5){ const near=[]; if(S.user&&S.locWarn!=="far") near.push({lat:S.user.lat,lon:S.user.lon}); if(hasXY(st)) near.push({lat:st.lat,lon:st.lon});
+      let bb=b; if(z<9.5){ const near=[]; if(S.user&&S.locWarn!=="far") near.push({lat:S.user.lat,lon:S.user.lon}); if(hasXY(st)) near.push({lat:st.lat,lon:st.lon});
         const around=pts.filter(p=>near.some(n=>haversine(n,{lat:p[0],lon:p[1]})<9000)); bb=L.latLngBounds(around.length?around:(near.length?near.map(n=>[n.lat,n.lon]):pts)); }
       MAP.map.flyToBounds(bb,{paddingTopLeft:q.tl,paddingBottomRight:q.br,maxZoom:15,duration:1.1,easeLinearity:.25}); return; }
     MAP.fit(pts.length?pts:[],opts.soft&&MAP.ready?Math.min(15,MAP.map.getZoom()):15);
@@ -905,8 +916,9 @@ document.addEventListener("click",e=>{
     case "pin-done": S.pinMode=false; S.view="nearby"; placePin(); if(!desktop()) setSheet("half"); renderTop(); renderSheet(); drawMap({}); break;
     case "nearby": if(S.user&&S.locWarn!=="far"){ S.view="nearby"; renderSheet(); drawMap({fit:"local"}); } else openFrom(); break;
     case "pick-near": { const x=NEAR[+el.dataset.i]; if(x){ if(!desktop()&&S.sheet==="peek") setSheet("half"); selectStop(x.name); } break; }
-    case "from-back": S.view=S.fromPrev&&S.fromPrev!=="from"?S.fromPrev:"route"; if(S.view==="nearby"&&!(S.user&&S.locWarn!=="far")) S.view="route"; renderSheet(); drawMap({fit:"local"}); break;
+    case "from-back": S.view=(S.user&&S.locWarn!=="far"&&!S.stopManual)?"nearby":(S.fromPrev&&S.fromPrev!=="from"?S.fromPrev:"route"); if(S.view==="nearby"&&!(S.user&&S.locWarn!=="far")) S.view=S.stop?"route":"from"; renderSheet(); drawMap({fit:"local"}); break;
     case "pick-addr": { const a=ADDR[+el.dataset.i]; if(a){ S.view="nearby"; if(a.approx){ setManual({lat:a.lat,lng:a.lon},true); startManual(); } else setManual({lat:a.lat,lng:a.lon},false); } break; }
+    case "pick-stopres": { const x=STOPRES[+el.dataset.i]; if(x){ S.pinMode=false; placePin(); if(!desktop()&&S.sheet==="peek") setSheet("half"); selectStop(x.name); } break; }
     case "pin-back": S.pinMode=false; placePin(); openFrom(); break;
     case "toggle-dest": setDest(S.dest===ENT?RC:ENT); break;
     case "zoom": if(MAP.ready){ const m=MAP.map; m.flyTo(m.getCenter(),Math.max(m.getMinZoom(),Math.min(m.getMaxZoom(),m.getZoom()+(+v>0?1:-1))),{duration:.6,easeLinearity:.25}); } break;
@@ -1008,7 +1020,7 @@ function renderEdit(){
       <button class="btn sec" type="button" id="copyBtn">4a. Копировать координаты</button>
       <button class="btn sec" type="button" id="copyGeoBtn">4b. Копировать линии</button></div>
     <p class="notice" id="editStatus" role="status">${esc(EDIT_STATUS||"Перетащите метки на карте, если они стоят неточно.")}</p>
-    ${miss.length?`<div class="notice warn"><b>Без координат. Нажмите на название, затем кликните по карте:</b>${miss.map(s=>`<button class="btn sec" type="button" data-act="edit-pick" data-name="${esc(s.name)}">${esc(s.name)}</button>`).join("")}</div>`:""}`;
+    ${miss.length?`<div class="notice warn"><b>Без координат — нажмите и затем кликните по карте:</b>${miss.map(s=>`<button class="btn sec" type="button" data-act="edit-pick" data-name="${esc(s.name)}">${esc(s.name)}</button>`).join("")}</div>`:""}`;
   const st=t=>{ EDIT_STATUS=t; const e=$("editStatus"); if(e) e.textContent=t; };
   $("geoBtn").onclick=async()=>{ $("geoBtn").disabled=true; await geocodeMissing((i,n)=>st(`Ищу координаты: ${i} из ${n}`)); st("Готово. Проверьте метки на карте."); drawMap({fit:"all"}); renderEdit(); };
   $("roadBtn").onclick=async()=>{ $("roadBtn").disabled=true; const r=await buildRoadGeometry((i,n,f)=>st(`Строю линии: ${i} из ${n}${f?`, не удалось: ${f}`:""}`)); st(`Готово: ${r.total-r.fail} из ${r.total}.`); renderEdit(); };
@@ -1033,7 +1045,7 @@ if(!EDIT && navigator.permissions && navigator.permissions.query){
     else if(p.state==="denied"){ S.locErr="denied"; renderSheet(); }
   }).catch(()=>{});
 }
-document.addEventListener("touchmove",e=>{ if(e.touches.length>1&&!e.target.closest("#map")) e.preventDefault(); },{passive:false});
+[$("sheet"),document.querySelector(".topbar")].forEach(el=>{ if(el) el.addEventListener("touchmove",e=>{ if(e.touches.length>1) e.preventDefault(); },{passive:false}); });
 if(window.visualViewport){ const kb=()=>{ const v=visualViewport; document.documentElement.style.setProperty("--kb",Math.max(0,Math.round(window.innerHeight-v.height-v.offsetTop))+"px"); kbLayout(); if(S.sheet!=="peek"&&!KB) setSheet(S.sheet); }; visualViewport.addEventListener("resize",kb); visualViewport.addEventListener("scroll",kb); }
 document.addEventListener("change",e=>{ if(e.target.id==="schedDate"){ S.schedDate=e.target.value||null; renderSchedHead(); renderSchedList(); } });
 ["gesturestart","gesturechange","gestureend"].forEach(t=>document.addEventListener(t,e=>e.preventDefault()));
