@@ -45,6 +45,7 @@ const ICONS = {
   swapV:'<path d="M7 4v15M3.5 15.5 7 19l3.5-3.5M17 20V5M13.5 8.5 17 5l3.5 3.5"/>',
   origin:'<circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/>',
   dest:'<path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>',
+  chevR:'<path d="M9 6l6 6-6 6"/>',
   flag:'<path d="M6 21V4M6 5h11l-2 4 2 4H6"/>',
   pin:'<path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>',
   plane:'<path d="M21 3 3 10.5l7 2.5 2.5 7L21 3z"/><path d="M10 13 21 3"/>',
@@ -293,7 +294,7 @@ function renderFrom(head,body,foot){
   head.innerHTML=`<div class="trow">${S.stop||S.user?`<button class="backbtn" type="button" data-act="from-back" aria-label="Назад">${svg("back")}</button>`:""}<div class="titlebtn"><span class="t"><h2>Откуда Вы поедете?</h2></span></div></div>`;
   body.innerHTML=`<label class="search">${svg("search")}<input id="addrQ" type="search" placeholder="Введите адрес" autocomplete="off" enterkeyhint="search"></label>
     <ul class="stoplist addr" id="addrRes"></ul>
-    <div class="row2 frombtns"><button class="btn" type="button" data-act="locate">${svg("locate")}Определить меня</button><button class="btn sec" type="button" data-act="manual">${svg("pin")}Указать на карте</button></div>`;
+    <div class="row2 frombtns"><button class="btn sec" type="button" data-act="manual">${svg("pin")}Указать на карте</button></div>`;
   foot.hidden=true;
   const inp=$("addrQ");
   inp.addEventListener("input",()=>{ clearTimeout(addrT); const v=inp.value; STOPRES=stopMatches(v); if($("addrRes")) $("addrRes").innerHTML=stopsBlock()+(v.trim().length>=3?'<li class="empty">Ищем…</li>':""); addrT=setTimeout(()=>{ if(v.trim().length>=3) addrSearch(v); },450); });
@@ -373,7 +374,7 @@ function renderSheet(){
   const pr=pickRide(plan), sel=pr.sel;
   /* --- заголовок --- */
   if(!S.stop){
-    head.innerHTML=`<button class="titlebtn" type="button" data-act="pick-stop"><span class="t"><h2>Откуда Вы поедете?</h2><small>Выберите остановку или определите, где вы</small></span>${svg("chev")}</button>`;
+    head.innerHTML=`<button class="titlebtn" type="button" data-act="pick-stop"><span class="t"><h2>Откуда Вы поедете?</h2><small>Выберите остановку или укажите, где вы</small></span>${svg("chev")}</button>`;
   }else{
     const near=nearestStop(), isNear=near&&near.name===S.stop;
     const sub = dist!=null ? `${isNear&&!S.stopManual?"Ближайшая остановка":S.stopManual?"Остановка":"Удобная остановка"} · ${fmtDist(dist)} от вас` : "Остановка";
@@ -388,23 +389,28 @@ function renderSheet(){
   let html="";
   if(S.locating && !S.user) html+=`<div class="notice"><b>Определяем местоположение…</b><span class="mute">Разрешите доступ, если появится запрос.</span></div>`;
   if(S.locErr){
-    const msg={denied:"Нет доступа к местоположению. Разрешите его в настройках приложения или браузера — или укажите точку на карте.",
+    const msg={denied:"Доступ к местоположению запрещён. Разрешите его в настройках телефона или браузера — или укажите место на карте.",
       timeout:"Не удалось определить местоположение вовремя. Выйдите на открытое место или укажите точку на карте.",
       unavailable:"Местоположение сейчас недоступно. Включите GPS или укажите точку на карте.",
       unsupported:"В этом приложении местоположение недоступно. Укажите точку на карте."}[S.locErr]||"Местоположение недоступно.";
     html+=`<div class="notice warn"><b>Не получилось определить, где вы</b><span>${msg}</span>
       <button class="btn" type="button" data-act="manual">${svg("pin")}Указать на карте</button></div>`;
   }
-  if(S.user && S.locWarn){
-    const far = S.locWarn==="far";
-    html+=`<div class="notice warn"><b>${far?"Вы далеко от маршрутов":"Местоположение неточное"}</b>
-      <span>${far?"Точка определена за пределами района рейсов. Если включён VPN, слабый GPS или Wi-Fi, местоположение могло определиться неверно. ":`Точность около ${fmtDist(S.user.acc)}. `}Укажите, где вы находитесь, на карте — расчёт будет точнее.</span>
+  if(S.user && S.locWarn==="far"){
+    const km=Math.round(haversine(S.user,regionCenter())/1000);
+    html+=`<div class="notice warn"><b>Похоже, вас определило далеко от маршрутов</b>
+      <span>Телефон показывает место примерно в ${km} км от района рейсов. Так бывает из-за VPN, Wi-Fi или слабого GPS. Укажите, где вы, на карте или адресом.</span>
+      <button class="btn" type="button" data-act="manual">${svg("pin")}Указать на карте</button>
+      <button class="btn sec" type="button" data-act="pick-stop">${svg("search")}Найти по адресу</button>
+      <button class="btn sec" type="button" data-act="locate">${svg("locate")}Определить снова</button></div>`;
+  }else if(S.user && S.locWarn){
+    html+=`<div class="notice warn"><b>Местоположение неточное</b>
+      <span>Точность около ${fmtDist(S.user.acc)}. Укажите, где вы находитесь, на карте — расчёт будет точнее.</span>
       <button class="btn" type="button" data-act="manual">${svg("pin")}Указать на карте</button>
       <button class="btn sec" type="button" data-act="locate">${svg("locate")}Определить снова</button></div>`;
   }
   if(!S.stop){
     html+=`<div class="row2" style="margin-top:6px">
-      <button class="btn" type="button" data-act="locate">${svg("locate")}Определить местоположение</button>
       <button class="btn sec" type="button" data-act="pick-stop">${svg("search")}Найти по адресу</button>
       <button class="btn sec" type="button" data-act="manual">${svg("pin")}Указать на карте</button></div>`;
   }else{
@@ -518,9 +524,10 @@ function timelineHTML(plan,pr,dist){
    ============================================================ */
 function renderTop(){
   const toP=S.dir==="to", plantName=S.dest===ENT?"Завод":S.dest;
-  const meLbl=(S.user&&!S.stopManual)||!S.stop?"Моё местоположение":ql(S.stop);
-  const me=`<button type="button" class="ep" data-act="pick-stop" aria-label="${toP?"Откуда":"Куда"}: ${esc(meLbl)}">${svg("origin")}<span class="tx"><b>${esc(meLbl)}</b></span>${svg("chev")}</button>`;
-  const pl=`<button type="button" class="ep plant${S.dest===RC?" rc":""}" data-act="toggle-dest" aria-label="${toP?"Куда":"Откуда"}: ${esc(plantName)}" title="Сменить: завод / РЦ Кудиново">${svg("dest")}<span class="tx"><b>${esc(plantName)}</b></span>${svg("chev")}</button>`;
+  const far=S.user&&S.locWarn==="far"&&!S.user.manual;
+  const meLbl=far?"Укажите, где вы":(S.user&&!S.stopManual)||!S.stop?"Моё местоположение":ql(S.stop);
+  const me=`<button type="button" class="ep" data-act="origin" aria-label="${toP?"Откуда":"Куда"}: ${esc(meLbl)}">${svg("origin")}<span class="tx"><b>${esc(meLbl)}</b></span>${svg("chevR")}</button>`;
+  const pl=`<button type="button" class="ep plant${S.dest===RC?" rc":""}" data-act="toggle-dest" aria-label="${toP?"Куда":"Откуда"}: ${esc(plantName)}" title="Сменить: завод / РЦ Кудиново">${svg("dest")}<span class="tx"><b>${esc(plantName)}</b></span>${svg("chevR")}</button>`;
   $("destSeg").innerHTML=`<div class="rf">${toP?me+pl:pl+me}</div><button type="button" class="sw" data-act="swap" aria-label="Поменять местами" title="Поменять местами">${svg("swapV")}</button>`;
   const chip=$("whenChip");
   chip.innerHTML=svg("plan")+esc(whenLabel());
@@ -943,6 +950,7 @@ document.addEventListener("click",e=>{
     case "pin-back": S.pinMode=false; placePin(); openFrom(); break;
     case "toggle-dest": setDest(S.dest===ENT?RC:ENT); break;
     case "zoom": MAP.step(+v); break;
+    case "origin": if(S.user&&S.locWarn!=="far"){ S.view="nearby"; if(!desktop()&&S.sheet==="peek") setSheet("half"); renderSheet(); drawMap({fit:"local"}); } else if(S.locErr==="denied"||S.locWarn==="far") openFrom(); else startLocate(); break;
     case "locate-close": closeModal(); setTab("map"); startLocate(); break;
     case "manual-close": closeModal(); startManual(); break;
     case "mode": S.mode=v; store.set("bus.mode",v); renderSheet(); break;
@@ -1061,11 +1069,13 @@ if(EDIT){ S.sheet="half"; }
 setSheet(S.sheet);
 renderSheet();
 if(MAP.ready) drawMap({fit:EDIT?"all":"local"});
-if(!EDIT && navigator.permissions && navigator.permissions.query){
-  navigator.permissions.query({name:"geolocation"}).then(p=>{
-    if(p.state==="granted") startLocate();
-    else if(p.state==="denied"){ S.locErr="denied"; renderSheet(); }
-  }).catch(()=>{});
+if(!EDIT){
+  const go=()=>{ if(!(S.stop&&S.stopManual)) startLocate(); };
+  if(navigator.permissions && navigator.permissions.query){
+    navigator.permissions.query({name:"geolocation"}).then(p=>{
+      if(p.state==="denied"){ S.locErr="denied"; renderSheet(); } else go();
+    }).catch(go);
+  } else go();
 }
 [$("sheet"),document.querySelector(".topbar")].forEach(el=>{ if(el) el.addEventListener("touchmove",e=>{ if(e.touches.length>1) e.preventDefault(); },{passive:false}); });
 if(window.visualViewport){ const kb=()=>{ const v=visualViewport; document.documentElement.style.setProperty("--kb",Math.max(0,Math.round(window.innerHeight-v.height-v.offsetTop))+"px"); kbLayout(); if(S.sheet!=="peek"&&!KB) setSheet(S.sheet); }; visualViewport.addEventListener("resize",kb); visualViewport.addEventListener("scroll",kb); }
