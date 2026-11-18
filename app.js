@@ -519,15 +519,14 @@ function timelineHTML(plan,pr,dist){
 function renderTop(){
   const toP=S.dir==="to", plantName=S.dest===ENT?"Завод":S.dest;
   const meLbl=(S.user&&!S.stopManual)||!S.stop?"Моё местоположение":ql(S.stop);
-  const me=`<button type="button" class="ep" data-act="pick-stop">${svg("origin")}<span class="tx"><small>${toP?"Откуда":"Куда"}</small><b>${esc(meLbl)}</b></span>${svg("chev")}</button>`;
-  const pl=`<button type="button" class="ep plant${S.dest===RC?" rc":""}" data-act="toggle-dest" title="Сменить: завод / РЦ Кудиново">${svg("dest")}<span class="tx"><small>${toP?"Куда":"Откуда"}</small><b>${esc(plantName)}</b></span>${svg("chev")}</button>`;
+  const me=`<button type="button" class="ep" data-act="pick-stop" aria-label="${toP?"Откуда":"Куда"}: ${esc(meLbl)}">${svg("origin")}<span class="tx"><b>${esc(meLbl)}</b></span>${svg("chev")}</button>`;
+  const pl=`<button type="button" class="ep plant${S.dest===RC?" rc":""}" data-act="toggle-dest" aria-label="${toP?"Куда":"Откуда"}: ${esc(plantName)}" title="Сменить: завод / РЦ Кудиново">${svg("dest")}<span class="tx"><b>${esc(plantName)}</b></span>${svg("chev")}</button>`;
   $("destSeg").innerHTML=`<div class="rf">${toP?me+pl:pl+me}</div><button type="button" class="sw" data-act="swap" aria-label="Поменять местами" title="Поменять местами">${svg("swapV")}</button>`;
   const chip=$("whenChip");
   chip.innerHTML=svg("plan")+esc(whenLabel());
   chip.classList.toggle("on",!!S.when);
   $("fabs").innerHTML=`<button class="fab sm" type="button" data-act="zoom" data-v="1" aria-label="Приблизить">+</button>
     <button class="fab sm" type="button" data-act="zoom" data-v="-1" aria-label="Отдалить">−</button>
-    <button class="fab" type="button" data-act="fit" aria-label="Показать маршрут" title="Показать маршрут">${svg("route")}</button>
     <button class="fab${S.user&&!S.user.manual?" on":""}" type="button" data-act="locate" aria-label="Где я" title="Где я">${svg("locate")}</button>`;
   $("schedBtn").innerHTML=svg("list")+"Расписание";
 }
@@ -753,10 +752,11 @@ function setSheet(state){
   const startDrag=y=>{ sy=lastY=y; sh=sheet.offsetHeight; moved=false; active=true; lastT=performance.now(); vel=0;
     window.addEventListener("pointermove",move); window.addEventListener("pointerup",end); window.addEventListener("pointercancel",end); };
   let TY=0, TS=false, TD=false;
-  sheet.addEventListener("touchstart",e=>{ TY=e.touches[0].clientY; TD=false; TS=!desktop()&&!!e.target.closest("#drag"); },{passive:true});
+  sheet.addEventListener("touchstart",e=>{ const b=$("sheetBody"); TY=e.touches[0].clientY; TD=false; TS=!desktop()&&S.sheet==="full"&&!e.target.closest("input")&&(!b.contains(e.target)||b.scrollTop<=0); },{passive:true});
   sheet.addEventListener("touchmove",e=>{ if(TD){ e.preventDefault(); return; } if(!TS) return; const dy=e.touches[0].clientY-TY; if(dy>6){ TD=true; e.preventDefault(); startDrag(TY); } else if(dy<-6) TS=false; },{passive:false});
   sheet.addEventListener("pointerdown",e=>{
-    if(desktop()||e.button>0||!e.target.closest("#drag")) return;
+    if(desktop()||e.button>0||e.target.closest("input")) return;
+    const b=$("sheetBody"); if(S.sheet==="full"&&b.contains(e.target)&&b.scrollTop>0) return;
     sy=lastY=e.clientY; sh=sheet.offsetHeight; moved=false; active=true; lastT=performance.now(); vel=0;
     window.addEventListener("pointermove",move); window.addEventListener("pointerup",end); window.addEventListener("pointercancel",end);
   });
@@ -943,7 +943,6 @@ document.addEventListener("click",e=>{
     case "pin-back": S.pinMode=false; placePin(); openFrom(); break;
     case "toggle-dest": setDest(S.dest===ENT?RC:ENT); break;
     case "zoom": MAP.step(+v); break;
-    case "fit": drawMap(S.stop?{fit:"route",fly:true}:{fit:"all"}); break;
     case "locate-close": closeModal(); setTab("map"); startLocate(); break;
     case "manual-close": closeModal(); startManual(); break;
     case "mode": S.mode=v; store.set("bus.mode",v); renderSheet(); break;
@@ -1054,6 +1053,7 @@ function renderEdit(){
 /* ============================================================
    Старт
    ============================================================ */
+["gesturestart","gesturechange","gestureend"].forEach(t=>document.addEventListener(t,e=>e.preventDefault()));
 applyTheme();
 renderTop();
 MAP.load();
