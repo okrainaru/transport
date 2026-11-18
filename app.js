@@ -34,7 +34,6 @@ const ICONS = {
   clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   locate:'<circle cx="12" cy="12" r="3.4"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/>',
   route:'<circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="6" r="2.4"/><path d="M8.4 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.6"/>',
-  walk:'<circle cx="13" cy="4.5" r="1.8"/><path d="M11 21l1.6-6-2.6-2.4.9-4.4 3.3 2.2 2.3.8M9.9 9.2 7.2 11l-.5 3"/>',
   car:'<path d="M4 16v-4l2-5h12l2 5v4M3 16h18M7 16v2.5M17 16v2.5"/><circle cx="8" cy="13" r=".7"/><circle cx="16" cy="13" r=".7"/>',
   chev:'<path d="M6 9l6 6 6-6"/>',
   close:'<path d="M6 6l12 12M18 6 6 18"/>',
@@ -288,10 +287,11 @@ function openFrom(){
   if(!desktop()&&S.sheet==="peek") setSheet("half"); renderTop(); renderSheet(); drawMap({});
 }
 function renderFrom(head,body,foot){
-  head.innerHTML=`<div class="trow">${S.stop||S.user?`<button class="backbtn" type="button" data-act="from-back" aria-label="Назад">${svg("back")}</button>`:""}<div class="titlebtn"><span class="t"><h2>Откуда вы едете?</h2></span></div></div>`;
+  head.innerHTML=`<div class="trow">${S.stop||S.user?`<button class="backbtn" type="button" data-act="from-back" aria-label="Назад">${svg("back")}</button>`:""}<div class="titlebtn"><span class="t"><h2>Откуда поедете?</h2></span></div></div>`;
   body.innerHTML=`<label class="search">${svg("search")}<input id="addrQ" type="search" placeholder="Введите адрес" autocomplete="off" enterkeyhint="search"></label>
     <ul class="stoplist addr" id="addrRes"></ul>
-    <div class="row2 frombtns"><button class="btn" type="button" data-act="locate">${svg("locate")}Определить местоположение</button><button class="btn sec" type="button" data-act="manual">${svg("pin")}Указать на карте</button></div>`;
+    <p class="small mute addrnote">Адрес ищется через сервис OpenStreetMap (Photon, Nominatim).</p>
+    <div class="row2 frombtns"><button class="btn" type="button" data-act="locate">${svg("locate")}Определить меня</button><button class="btn sec" type="button" data-act="manual">${svg("pin")}Указать на карте</button></div>`;
   foot.hidden=true;
   const inp=$("addrQ");
   inp.addEventListener("input",()=>{ clearTimeout(addrT); const v=inp.value; STOPRES=stopMatches(v); if($("addrRes")) $("addrRes").innerHTML=stopsBlock()+(v.trim().length>=3?'<li class="empty">Ищем…</li>':""); addrT=setTimeout(()=>{ if(v.trim().length>=3) addrSearch(v); },450); });
@@ -403,10 +403,8 @@ function renderSheet(){
   if(!S.stop){
     html+=`<div class="row2" style="margin-top:6px">
       <button class="btn" type="button" data-act="locate">${svg("locate")}Определить местоположение</button>
-      <div class="duo">
-        <button class="btn sec" type="button" data-act="pick-stop">${svg("search")}Найти по адресу</button>
-        <button class="btn sec" type="button" data-act="manual">${svg("pin")}Указать на карте</button>
-      </div></div>`;
+      <button class="btn sec" type="button" data-act="pick-stop">${svg("search")}Найти по адресу</button>
+      <button class="btn sec" type="button" data-act="manual">${svg("pin")}Указать на карте</button></div>`;
   }else{
     const near=nearestStop();
     if(S.user && near && near.name!==S.stop && S.locWarn!=="far")
@@ -460,7 +458,7 @@ function timelineHTML(plan,pr,dist){
   const rideCard = `<div class="ride">
     ${(()=>{ const t=[first?"Ближайший автобус":(pr.auto?"Ближайший, на который успеете":""),plan.offset>0?dayWord(plan.date,c.today):""].filter(Boolean).join(" · "); return t?`<div class="lbl">${t}</div>`:""; })()}
     <div class="big"><span class="t">${sel.dep?(sel.kind==="approx"?"≈":"")+sel.dep:tt.start}</span>${sel.dep?"":`<span class="dmq">по требованию</span>`}<span class="badge b${tt.route}">${tt.route}</span>${cd?`<span class="cd">${cd}</span>`:""}</div>
-    ${(()=>{ const m=[!sel.dep?"по требованию":"",sel.kind==="rc"?"для сотрудников РЦ":"",sel.note?esc(sel.note):"",sel.xfer?"с пересадкой":""].filter(Boolean).join(" · "); return m?`<div class="meta">${m}</div>`:""; })()}
+    ${(()=>{ const m=[!sel.dep?"по требованию: ходит, если есть пассажиры":"",sel.kind==="rc"?"для сотрудников РЦ":"",sel.note?esc(sel.note):"",sel.xfer?"с пересадкой":""].filter(Boolean).join(" · "); return m?`<div class="meta">${m}</div>`:""; })()}
     ${leaveBy}</div>`;
   /* остальные рейсы мелко */
   const others = plan.rides.map((r,i)=>({r,i})).filter(x=>x.i!==idx);
@@ -519,28 +517,25 @@ function timelineHTML(plan,pr,dist){
 function renderTop(){
   const toP=S.dir==="to", plantName=S.dest===ENT?"Завод":S.dest;
   const meLbl=(S.user&&!S.stopManual)||!S.stop?"Моё местоположение":ql(S.stop);
-  const plantCls=S.dest===RC?" plant rc":" plant", plantTitle=' title="Сменить: завод / РЦ Кудиново"';
-  const fromLbl=toP?meLbl:plantName, fromAct=toP?"pick-stop":"toggle-dest", fromCls=toP?"":plantCls, fromTitle=toP?"":plantTitle;
-  const toLbl=toP?plantName:meLbl, toAct=toP?"toggle-dest":"pick-stop", toCls=toP?plantCls:"", toTitle=toP?plantTitle:"";
-  $("destSeg").innerHTML=
-    `<div class="rrows">
-      <div class="rrow"><i class="mdot"></i><button type="button" class="ep${fromCls}" data-act="${fromAct}"${fromTitle}>${esc(fromLbl)}</button></div>
-      <div class="rrow"><i class="mpin${toP&&S.dest===RC?" rc":""}">${svg("pin")}</i><button type="button" class="ep${toCls}" data-act="${toAct}"${toTitle}>${esc(toLbl)}</button></div>
-    </div>
-    <button type="button" class="sw" data-act="swap" aria-label="Поменять местами" title="Поменять местами">${svg("swap")}</button>`;
+  const me=`<button type="button" class="ep" data-act="pick-stop">${svg("user")}<span><small>${toP?"Откуда":"Куда"}</small>${esc(meLbl)}</span></button>`;
+  const pl=`<button type="button" class="ep plant${S.dest===RC?" rc":""}" data-act="toggle-dest" title="Сменить: завод / РЦ Кудиново">${svg("bus")}<span><small>${toP?"Куда":"Откуда"}</small>${esc(plantName)}</span></button>`;
+  $("destSeg").innerHTML=(toP?me:pl)+`<button type="button" class="sw" data-act="swap" aria-label="Поменять местами" title="Поменять местами">${svg("swap")}</button>`+(toP?pl:me);
   const chip=$("whenChip");
   chip.innerHTML=svg("plan")+esc(whenLabel());
   chip.classList.toggle("on",!!S.when);
   $("fabs").innerHTML=`<button class="fab sm" type="button" data-act="zoom" data-v="1" aria-label="Приблизить">+</button>
     <button class="fab sm" type="button" data-act="zoom" data-v="-1" aria-label="Отдалить">−</button>
-    <button class="fab${S.user&&!S.user.manual?" on":""}" type="button" data-act="locate" aria-label="Где я" title="Где я">${svg("plane")}</button>`;
-  $("schedBtn").innerHTML=svg("list")+"Расписание";
+    <button class="fab${S.user&&!S.user.manual?" on":""}" type="button" data-act="locate" aria-label="Где я" title="Где я">${svg("locate")}</button>`;
+  $("tabMap").innerHTML=svg("map")+"Карта";
+  $("tabSched").innerHTML=svg("list")+"Расписание";
 }
 
 function setTab(t){
   S.tab=t;
   $("mapView").hidden = t!=="map";
   $("schedView").hidden = t!=="sched";
+  $("tabMap").setAttribute("aria-selected",t==="map");
+  $("tabSched").setAttribute("aria-selected",t==="sched");
   if(t==="map"){ setTimeout(()=>{ MAP.map&&MAP.map.invalidateSize(); setSheet(S.sheet); },30); }
   else renderSched();
 }
@@ -598,13 +593,26 @@ function renderSched(){ renderSchedHead(); renderSchedList(); }
    Модальные окна: «Когда поедете?» и выбор остановки
    ============================================================ */
 const modalRoot=$("modalRoot");
+let MODAL_RET=null;
 function openModal(title,inner,onOpen){
-  modalRoot.innerHTML=`<div class="modal" data-act="modal-bg"><div class="mcard" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+  MODAL_RET=document.activeElement;
+  modalRoot.innerHTML=`<div class="modal" data-act="modal-bg"><div class="mcard" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">
     <div class="mhead"><h3>${esc(title)}</h3><button class="mclose" type="button" data-act="close-modal" aria-label="Закрыть">${svg("close")}</button></div>
     <div class="mbody">${inner}</div></div></div>`;
   onOpen&&onOpen();
+  const card=modalRoot.querySelector(".mcard"); if(card) card.focus({preventScroll:true});
 }
-const closeModal=()=>{ modalRoot.innerHTML=""; };
+const closeModal=()=>{ modalRoot.innerHTML=""; if(MODAL_RET&&MODAL_RET.isConnected) MODAL_RET.focus(); MODAL_RET=null; };
+document.addEventListener("keydown",e=>{
+  if(!modalRoot.firstElementChild) return;
+  if(e.key==="Escape"){ closeModal(); return; }
+  if(e.key!=="Tab") return;
+  const f=[...modalRoot.querySelectorAll("button,input,select,[tabindex]:not([tabindex='-1'])")].filter(x=>!x.disabled);
+  if(!f.length) return;
+  const a=f[0], z=f[f.length-1];
+  if(e.shiftKey&&(document.activeElement===a||document.activeElement.classList.contains("mcard"))){ e.preventDefault(); z.focus(); }
+  else if(!e.shiftKey&&document.activeElement===z){ e.preventDefault(); a.focus(); }
+});
 
 function openWhen(){
   const c=ctx(), rn=realNow();
@@ -712,6 +720,7 @@ function sheetHeights(){ const a=autoH(); const vh=window.visualViewport?visualV
 function setSheet(state){
   if(desktop()) state="half";
   S.sheet=state; if(state!=="full"){ const b=$("sheetBody"); if(b) b.scrollTop=0; } const el=$("sheet"); el.dataset.state=state;
+  const gr=el.querySelector(".grab"); if(gr) gr.setAttribute("aria-expanded",String(state==="full"));
   if(!desktop()){ $("mapView").style.setProperty("--sheet-h", sheetHeights()[state]+"px"); }
   else $("mapView").style.removeProperty("--sheet-h");
 }
@@ -804,7 +813,7 @@ function ridePoints(r){
       const a=leg.trip.stops[k].stop, b=leg.trip.stops[k+1].stop; if(a===b) continue;
       const A=stopByName[a], B=stopByName[b]; if(!hasXY(A)||!hasXY(B)) continue;
       const g=GEOM[pairKey(a,b)];
-      pts.push({pts:g||[[A.lat,A.lon],[B.lat,B.lon]],road:!!g,rc:leg.trip.stops[leg.i].stop===RC||leg.trip.stops[leg.j].stop===RC});
+      pts.push({pts:g||[[A.lat,A.lon],[B.lat,B.lon]],road:!!g,route:leg.trip.route,rc:leg.trip.stops[leg.i].stop===RC||leg.trip.stops[leg.j].stop===RC});
     }
   });
   return pts;
@@ -821,6 +830,9 @@ function stopMarker(s,o){
        : o.path?{radius:5,weight:2,color:card,fillColor:acc,fillOpacity:1}
        : {radius:7,weight:3,color:acc,fillColor:card,fillOpacity:1});
     m.on("click",()=>selectStop(s.name,true));
+    m.on("add",()=>{ const el=m._path; if(!el||el.dataset.kb) return; el.dataset.kb="1";
+      el.setAttribute("tabindex","0"); el.setAttribute("role","button"); el.setAttribute("aria-label",ql(s.name));
+      el.addEventListener("keydown",ev=>{ if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); selectStop(s.name,true); } }); });
   }
   m.bindTooltip(esc(ql(s.name)),{direction:"top",offset:[0,o.sel?-10:-6],permanent:!!o.sel||!!o.nb,className:o.nb?"lbl nblbl":"lbl"});
   return m;
@@ -839,7 +851,7 @@ function drawMap(opts={}){
     const lines=sel.legs.length?ridePoints(sel):[];
     for(const ln of lines){
       MAP.g.route.addLayer(L.polyline(ln.pts,{color:casing,weight:10,opacity:.95,lineCap:"round",lineJoin:"round",interactive:false}));
-      MAP.g.route.addLayer(L.polyline(ln.pts,{color:ln.rc?cssVar("--rc"):cssVar("--grn"),weight:5,opacity:1,lineCap:"round",lineJoin:"round",dashArray:ln.road?null:"1 10",interactive:false}));
+      MAP.g.route.addLayer(L.polyline(ln.pts,{color:ln.rc?cssVar("--rc"):(cssVar("--r"+ln.route)||cssVar("--rx")),weight:5,opacity:1,lineCap:"round",lineJoin:"round",dashArray:ln.road?null:"1 10",interactive:false}));
       routePts=routePts.concat(ln.pts);
     }
     sel.legs.forEach(leg=>{ for(let k=leg.i;k<=leg.j;k++){ pathStops.add(leg.trip.stops[k].stop); if(rcOf(leg)) rcStops.add(leg.trip.stops[k].stop); } });
@@ -1059,12 +1071,4 @@ function softRender(){
   const b=$("sheetBody"), top=b.scrollTop, det=b.querySelector("details.path"), wasOpen=det&&det.open;
   renderSheet(); b.scrollTop=top; const d2=b.querySelector("details.path"); if(d2&&wasOpen) d2.open=true;
 }
-/* Пропускаем автообновление, пока пользователь печатает или держит фокус
-   на перерисовываемых элементах — иначе innerHTML сбивает фокус и клавиатуру. */
-function userBusy(){
-  const a=document.activeElement;
-  if(!a||a===document.body) return false;
-  if(a.matches&&a.matches("input,textarea,select,[contenteditable]")) return true;
-  return !!(a.closest&&a.closest("#sheet,.topbar,#schedHead,#schedList"));
-}
-setInterval(()=>{ if(userBusy()) return; if(S.tab==="map" && !S.when && !EDIT) softRender(); if(S.tab==="sched" && !S.when) renderSchedList(); renderTop(); },30000);
+setInterval(()=>{ if(S.tab==="map" && !S.when && !EDIT) softRender(); if(S.tab==="sched" && !S.when) renderSchedList(); renderTop(); },30000);
