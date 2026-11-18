@@ -20,7 +20,7 @@
   --shadow:0 -8px 28px rgba(20,27,43,.12);
   --r614:#DE4A30; --r797:#2F6FED; --r478:#7B4FE0; --r566:#D63E8C; --rx:#475569;
   --head:Nunito,"Segoe UI",system-ui,sans-serif; --body:Roboto,"Segoe UI",system-ui,sans-serif;
-  --tabh:64px; --sheet-h:200px;
+  --sheet-h:200px;
   color-scheme:light;
 }
 :root[data-theme="dark"]{
@@ -58,15 +58,6 @@ button svg{width:22px;height:22px}
 
 #app{position:fixed;inset:0;display:flex;flex-direction:column}
 .view{position:relative;flex:1;min-height:0}
-
-/* ---------- нижняя панель вкладок ---------- */
-.tabs{flex:none;display:grid;grid-template-columns:1fr 1fr;height:calc(var(--tabh) + env(safe-area-inset-bottom));
-  padding-bottom:env(safe-area-inset-bottom);background:var(--card);border-top:1px solid var(--line);z-index:30}
-.tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--mute);
-  font:700 12px/1 var(--head);letter-spacing:.02em}
-.tabs svg{width:26px;height:26px}
-.tabs button[aria-selected="true"]{color:var(--acc-text)}
-.tabs button[aria-selected="true"] svg{color:var(--acc)}
 
 /* ---------- карта ---------- */
 #map{position:absolute;inset:0;background:var(--raised);font-family:var(--body)}
@@ -131,9 +122,10 @@ button svg{width:22px;height:22px}
 .pill.warn{background:var(--warn-bg);color:var(--warn)}
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;border-radius:16px;background:var(--acc);color:var(--acc-ink);
   font:800 17px/1.1 var(--head);text-align:center;padding:0 18px}
-.btn.sec{background:var(--raised);color:var(--ink)}
+.btn.sec{background:var(--raised);color:var(--ink);min-height:46px;font:700 15px/1.1 var(--head)}
 .btn svg{width:22px;height:22px}
 .row2{display:grid;gap:10px}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .notice{border-radius:16px;padding:12px 14px;background:var(--raised);font-size:14.5px;display:grid;gap:10px;margin:6px 0 10px}
 .notice.warn{background:var(--warn-bg);color:var(--warn)}
 .notice b{font-family:var(--head)}
@@ -165,6 +157,9 @@ button svg{width:22px;height:22px}
 .ride .cd{font:800 17px/1.15 var(--head);color:var(--acc-text)}
 .ride .cd.far{color:var(--ink)}
 .ride .meta{margin-top:8px;color:var(--mute);font-size:14px}
+/* карточка рейса: номер маршрута крупнее — ключевая информация рядом со временем */
+.ride .badge{font-size:18px!important;line-height:1.15!important;padding:4px 14px 4px 11px!important;gap:7px!important}
+.ride .badge::before{width:19px!important;height:19px!important}
 .ride .go{margin-top:10px;display:flex;align-items:center;gap:8px;font:700 15px/1.2 var(--head)}
 .ride .go svg{width:20px;height:20px;color:var(--acc-text);flex:none}
 .ride .go.late,.ride .go.late svg{color:var(--warn)}
@@ -264,15 +259,14 @@ details.path[open] summary::after{transform:rotate(225deg)}
 .leaflet-tooltip.lbl{background:var(--card);color:var(--ink);border:0;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.3);font:700 13px/1.2 var(--head);padding:5px 9px;white-space:nowrap}
 .leaflet-tooltip.lbl::before{display:none}
 .editdot i{display:block;width:22px;height:22px;border-radius:50%;background:var(--acc);border:3px solid var(--card);box-shadow:0 0 0 1px var(--ink)}
-.toast{position:fixed;left:50%;bottom:calc(var(--tabh) + 20px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:3000;
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:3000;
   background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:16px;font:600 14.5px/1.3 var(--body);max-width:min(92vw,440px);text-align:center}
 
 /* ---------- компьютер: шторка превращается в левую панель ---------- */
 @media (min-width:860px){
   #app{display:block}
   .view{position:absolute;inset:0}
-  .tabs{position:absolute;left:0;bottom:0;width:440px;z-index:900}
-  .sheet{top:0;left:0;right:auto;bottom:calc(var(--tabh) + env(safe-area-inset-bottom));width:440px;height:auto!important;border-radius:0;box-shadow:2px 0 24px rgba(0,0,0,.18);transition:none}
+  .sheet{top:0;left:0;right:auto;bottom:env(safe-area-inset-bottom);width:440px;height:auto!important;border-radius:0;box-shadow:2px 0 24px rgba(0,0,0,.18);transition:none}
   .grab{display:none}
   .drag{cursor:default}
   .head{padding-top:20px}
@@ -294,13 +288,19 @@ details.path[open] summary::after{transform:rotate(225deg)}
 .stline .sn{display:inline-block;min-width:20px;margin-right:8px;padding:1px 5px;border-radius:10px;background:var(--acc-text,#2a6df4);color:#fff;font:700 12px/16px Roboto,sans-serif;text-align:center;vertical-align:1px}
 
 /* переключатель «Моё местоположение ⇄ Завод», зум, пин */
-.rbar{display:flex;align-items:center;flex:1;min-width:0;background:var(--card);border-radius:16px;padding:4px;gap:2px;box-shadow:0 2px 12px rgba(0,0,0,.22)}
-.rbar .ep{flex:1;min-width:0;height:50px;border-radius:12px;display:flex;align-items:center;gap:8px;padding:0 10px;text-align:left;font:800 14px/1.2 var(--head);color:var(--ink);background:var(--raised)}
+.rbar{display:flex;align-items:center;flex:1;min-width:0;background:var(--card);border-radius:16px;padding:4px;gap:6px;box-shadow:0 2px 12px rgba(0,0,0,.22)}
+.rbar .ep{flex:1;min-width:0;height:44px;border-radius:12px;display:flex;align-items:center;gap:8px;padding:0 10px;text-align:left;font:800 14px/1.2 var(--head);color:var(--ink);background:var(--raised)}
 .rbar .ep span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rbar .ep small{display:block;font:600 11px/1.2 var(--head);color:var(--mute)}
 .rbar .ep svg{width:20px;height:20px;flex:none;color:var(--acc)}
 .rbar .sw{width:40px;height:40px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--acc)}
 .rbar .sw svg{width:22px;height:22px}
+.rrows{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.rrow{display:flex;align-items:center;gap:10px;min-width:0}
+.mdot{width:12px;height:12px;border-radius:50%;background:var(--mute);flex:none;margin-left:8px}
+.mpin{width:22px;height:22px;flex:none;margin-left:3px;color:var(--acc);display:flex;align-items:center;justify-content:center}
+.mpin svg{width:22px;height:22px}
+.mpin.rc{color:var(--rc)}
 .fab.sm{width:48px;height:48px;font:600 26px/1 var(--head);padding-bottom:3px}
 .leaflet-control-zoom{display:none!important}
 .youpin i{display:block;width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--you);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45)}
@@ -323,7 +323,6 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 
 /* v: «Выбрать», бейдж рейса с иконкой, переключатель в нижней панели, без нижней навигации */
 .pinbar{display:flex;align-items:center;justify-content:center;text-align:center}
-:root{--tabh:0px}.tabs{display:none!important}
 .topbar{flex-direction:row;align-items:center;justify-content:space-between}.topbar .whenchip{flex:none}
 .sheet .rbar{flex:none;margin:0 14px 6px;background:var(--raised);box-shadow:none}.sheet .rbar .ep{background:var(--card)}
 .trow{display:flex;align-items:center;gap:2px;margin-left:-10px}.trow .titlebtn{flex:1;min-width:0}
@@ -346,7 +345,7 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 .sheet[data-state="peek"] .body{display:block}
 /* оранжевый — только РЦ: метка, участок, остановки участка, иконка «Куда», линия в подробностях */
 .pin.rcp span{background:var(--rc)!important;color:#fff!important}
-.rbar .ep.plant.rc svg{color:var(--rc)}
+.rbar .ep.plant.rc{color:var(--rc)}
 .node.rcl .rail::before{background:var(--rc);opacity:.85}
 
 /* прокрутка — только когда панель выдвинута до конца; в свёрнутом виде панель компактная */

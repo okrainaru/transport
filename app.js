@@ -291,7 +291,7 @@ function renderFrom(head,body,foot){
   head.innerHTML=`<div class="trow">${S.stop||S.user?`<button class="backbtn" type="button" data-act="from-back" aria-label="Назад">${svg("back")}</button>`:""}<div class="titlebtn"><span class="t"><h2>Откуда вы едете?</h2></span></div></div>`;
   body.innerHTML=`<label class="search">${svg("search")}<input id="addrQ" type="search" placeholder="Введите адрес" autocomplete="off" enterkeyhint="search"></label>
     <ul class="stoplist addr" id="addrRes"></ul>
-    <div class="row2 frombtns"><button class="btn" type="button" data-act="locate">${svg("plane")}Определить меня</button><button class="btn sec" type="button" data-act="manual">${svg("pin")}Выбрать на карте</button></div>`;
+    <div class="row2 frombtns"><button class="btn" type="button" data-act="locate">${svg("locate")}Определить местоположение</button><button class="btn sec" type="button" data-act="manual">${svg("pin")}Указать на карте</button></div>`;
   foot.hidden=true;
   const inp=$("addrQ");
   inp.addEventListener("input",()=>{ clearTimeout(addrT); const v=inp.value; STOPRES=stopMatches(v); if($("addrRes")) $("addrRes").innerHTML=stopsBlock()+(v.trim().length>=3?'<li class="empty">Ищем…</li>':""); addrT=setTimeout(()=>{ if(v.trim().length>=3) addrSearch(v); },450); });
@@ -403,8 +403,10 @@ function renderSheet(){
   if(!S.stop){
     html+=`<div class="row2" style="margin-top:6px">
       <button class="btn" type="button" data-act="locate">${svg("locate")}Определить местоположение</button>
-      <button class="btn sec" type="button" data-act="pick-stop">${svg("search")}Найти по адресу</button>
-      <button class="btn sec" type="button" data-act="manual">${svg("pin")}Указать на карте</button></div>`;
+      <div class="duo">
+        <button class="btn sec" type="button" data-act="pick-stop">${svg("search")}Найти по адресу</button>
+        <button class="btn sec" type="button" data-act="manual">${svg("pin")}Указать на карте</button>
+      </div></div>`;
   }else{
     const near=nearestStop();
     if(S.user && near && near.name!==S.stop && S.locWarn!=="far")
@@ -517,9 +519,15 @@ function timelineHTML(plan,pr,dist){
 function renderTop(){
   const toP=S.dir==="to", plantName=S.dest===ENT?"Завод":S.dest;
   const meLbl=(S.user&&!S.stopManual)||!S.stop?"Моё местоположение":ql(S.stop);
-  const me=`<button type="button" class="ep" data-act="pick-stop">${svg("user")}<span><small>${toP?"Откуда":"Куда"}</small>${esc(meLbl)}</span></button>`;
-  const pl=`<button type="button" class="ep plant${S.dest===RC?" rc":""}" data-act="toggle-dest" title="Сменить: завод / РЦ Кудиново">${svg("bus")}<span><small>${toP?"Куда":"Откуда"}</small>${esc(plantName)}</span></button>`;
-  $("destSeg").innerHTML=(toP?me:pl)+`<button type="button" class="sw" data-act="swap" aria-label="Поменять местами" title="Поменять местами">${svg("swap")}</button>`+(toP?pl:me);
+  const plantCls=S.dest===RC?" plant rc":" plant", plantTitle=' title="Сменить: завод / РЦ Кудиново"';
+  const fromLbl=toP?meLbl:plantName, fromAct=toP?"pick-stop":"toggle-dest", fromCls=toP?"":plantCls, fromTitle=toP?"":plantTitle;
+  const toLbl=toP?plantName:meLbl, toAct=toP?"toggle-dest":"pick-stop", toCls=toP?plantCls:"", toTitle=toP?plantTitle:"";
+  $("destSeg").innerHTML=
+    `<div class="rrows">
+      <div class="rrow"><i class="mdot"></i><button type="button" class="ep${fromCls}" data-act="${fromAct}"${fromTitle}>${esc(fromLbl)}</button></div>
+      <div class="rrow"><i class="mpin${toP&&S.dest===RC?" rc":""}">${svg("pin")}</i><button type="button" class="ep${toCls}" data-act="${toAct}"${toTitle}>${esc(toLbl)}</button></div>
+    </div>
+    <button type="button" class="sw" data-act="swap" aria-label="Поменять местами" title="Поменять местами">${svg("swap")}</button>`;
   const chip=$("whenChip");
   chip.innerHTML=svg("plan")+esc(whenLabel());
   chip.classList.toggle("on",!!S.when);
@@ -527,16 +535,12 @@ function renderTop(){
     <button class="fab sm" type="button" data-act="zoom" data-v="-1" aria-label="Отдалить">−</button>
     <button class="fab${S.user&&!S.user.manual?" on":""}" type="button" data-act="locate" aria-label="Где я" title="Где я">${svg("plane")}</button>`;
   $("schedBtn").innerHTML=svg("list")+"Расписание";
-  $("tabMap").innerHTML=svg("map")+"Карта";
-  $("tabSched").innerHTML=svg("list")+"Расписание";
 }
 
 function setTab(t){
   S.tab=t;
   $("mapView").hidden = t!=="map";
   $("schedView").hidden = t!=="sched";
-  $("tabMap").setAttribute("aria-selected",t==="map");
-  $("tabSched").setAttribute("aria-selected",t==="sched");
   if(t==="map"){ setTimeout(()=>{ MAP.map&&MAP.map.invalidateSize(); setSheet(S.sheet); },30); }
   else renderSched();
 }
@@ -1055,4 +1059,12 @@ function softRender(){
   const b=$("sheetBody"), top=b.scrollTop, det=b.querySelector("details.path"), wasOpen=det&&det.open;
   renderSheet(); b.scrollTop=top; const d2=b.querySelector("details.path"); if(d2&&wasOpen) d2.open=true;
 }
-setInterval(()=>{ if(S.tab==="map" && !S.when && !EDIT) softRender(); if(S.tab==="sched" && !S.when) renderSchedList(); renderTop(); },30000);
+/* Пропускаем автообновление, пока пользователь печатает или держит фокус
+   на перерисовываемых элементах — иначе innerHTML сбивает фокус и клавиатуру. */
+function userBusy(){
+  const a=document.activeElement;
+  if(!a||a===document.body) return false;
+  if(a.matches&&a.matches("input,textarea,select,[contenteditable]")) return true;
+  return !!(a.closest&&a.closest("#sheet,.topbar,#schedHead,#schedList"));
+}
+setInterval(()=>{ if(userBusy()) return; if(S.tab==="map" && !S.when && !EDIT) softRender(); if(S.tab==="sched" && !S.when) renderSchedList(); renderTop(); },30000);
