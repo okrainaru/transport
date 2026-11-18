@@ -15,13 +15,14 @@
     <div id="map" aria-label="Карта"></div>
     <div class="topbar">
       <button class="whenchip" id="whenChip" type="button" data-act="open-when"></button>
+      <button class="whenchip" id="schedBtn" type="button" data-act="tab" data-v="sched"></button>
     </div>
     <div class="sheet" id="sheet" data-state="half">
       <div class="drag" id="drag">
         <button type="button" class="grab" data-act="grab" aria-expanded="false" aria-label="Развернуть или свернуть панель"><i></i></button>
-        <div class="rbar" id="destSeg" role="group" aria-label="Куда едем"></div>
-        <div class="head" id="sheetHead"></div>
       </div>
+      <div class="rbar" id="destSeg" role="group" aria-label="Маршрут"></div>
+      <div class="head" id="sheetHead"></div>
       <div class="body" id="sheetBody"></div>
       <div class="foot" id="sheetFoot"></div>
     </div>
@@ -37,10 +38,6 @@
     </div>
   </section>
 
-  <nav class="tabs" role="tablist" aria-label="Разделы">
-    <button type="button" role="tab" data-act="tab" data-v="map" aria-selected="true" id="tabMap" aria-controls="mapView"></button>
-    <button type="button" role="tab" data-act="tab" data-v="sched" aria-selected="false" id="tabSched" aria-controls="schedView"></button>
-  </nav>
 </div>
 <div id="modalRoot"></div>
 <div class="toast" id="toast" hidden role="status"></div>

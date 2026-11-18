@@ -20,7 +20,7 @@
   --shadow:0 -8px 28px rgba(20,27,43,.12);
   --r614:#DE4A30; --r797:#2F6FED; --r478:#7B4FE0; --r566:#D63E8C; --rx:#475569;
   --head:Nunito,"Segoe UI",system-ui,sans-serif; --body:Roboto,"Segoe UI",system-ui,sans-serif;
-  --tabh:64px; --sheet-h:200px;
+  --tabh:0px; --sheet-h:200px;
   color-scheme:light;
 }
 :root[data-theme="dark"]{
@@ -59,17 +59,6 @@ button svg{width:22px;height:22px}
 #app{position:fixed;inset:0;display:flex;flex-direction:column}
 .view{position:relative;flex:1;min-height:0}
 
-/* ---------- нижняя панель вкладок ---------- */
-.tabs{flex:none;display:grid;grid-template-columns:1fr 1fr;height:calc(var(--tabh) + env(safe-area-inset-bottom));
-  padding-bottom:env(safe-area-inset-bottom);background:var(--card);border-top:1px solid var(--line);z-index:30}
-.tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--mute);
-  font:800 14px/1 var(--head);letter-spacing:.01em}
-.tabs svg{width:26px;height:26px}
-.tabs button[aria-selected="true"]{color:var(--acc-text)}
-.tabs button[aria-selected="true"] svg{color:var(--acc-text)}
-.tabs{padding:8px 12px calc(8px + env(safe-area-inset-bottom));gap:8px}
-.tabs button{margin:0;border-radius:18px;transition:background .2s}
-.tabs button[aria-selected="true"]{background:var(--acc-soft);color:var(--acc-text)}
 
 /* ---------- карта ---------- */
 #map{position:absolute;inset:0;background:var(--raised);font-family:var(--body)}
@@ -84,9 +73,26 @@ button svg{width:22px;height:22px}
 .attr{position:absolute;z-index:500;left:8px;bottom:calc(var(--sheet-h) + 6px);font-size:12px;color:var(--mute);
   background:color-mix(in srgb,var(--card) 82%,transparent);padding:2px 7px;border-radius:8px;transition:bottom .25s}
 .attr a{color:inherit}
-.addrnote{margin:0 2px 8px}
 .mcard:focus{outline:none}
 path[tabindex]:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+
+/* переключатель «Откуда / Куда»: вертикально, вне зоны ручки, поля выглядят как кнопки */
+.rbar{display:flex;align-items:center;gap:10px;margin:2px 18px 12px}
+.rbar .rf{flex:1;min-width:0;display:grid;gap:8px}
+.rbar .ep{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:8px 14px;border-radius:14px;background:var(--raised);border:1px solid var(--line);color:var(--ink);text-align:left}
+.rbar .ep:active{filter:brightness(.96)}
+.rbar .ep>svg{width:22px;height:22px;flex:none;color:var(--acc)}
+.rbar .ep>svg:last-child{width:20px;height:20px;margin-left:auto;color:var(--mute)}
+.rbar .ep.plant.rc>svg:first-child{color:var(--rc)}
+.rbar .tx{display:grid;gap:2px;min-width:0;flex:1}
+.rbar .tx small{font:600 12px/1.2 var(--head);color:var(--mute)}
+.rbar .tx b{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:800 16px/1.25 var(--head)}
+.rbar .sw{width:44px;height:44px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--card);border:1px solid var(--line);color:var(--acc)}
+.rbar .sw svg{width:22px;height:22px}
+.sheet[data-state="peek"] .rbar{margin-bottom:6px}
+.sheet[data-state="peek"] .rbar .ep{min-height:40px;padding:4px 12px}
+.sheet[data-state="peek"] .rbar .tx small{display:none}
+@media (min-width:860px){.rbar{margin-top:20px}}
 .dragging~.attr,.attr.nt{transition:none}
 
 .topbar{position:absolute;z-index:600;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top));display:flex;flex-direction:column;gap:8px;align-items:stretch}
@@ -273,7 +279,6 @@ details.path[open] summary::after{transform:rotate(225deg)}
 @media (min-width:860px){
   #app{display:block}
   .view{position:absolute;inset:0}
-  .tabs{position:absolute;left:0;bottom:0;width:440px;z-index:900}
   .sheet{top:0;left:0;right:auto;bottom:calc(var(--tabh) + env(safe-area-inset-bottom));width:440px;height:auto!important;border-radius:0;box-shadow:2px 0 24px rgba(0,0,0,.18);transition:none}
   .grab{display:none}
   .drag{cursor:default}
@@ -296,13 +301,6 @@ details.path[open] summary::after{transform:rotate(225deg)}
 .stline .sn{display:inline-block;min-width:20px;margin-right:8px;padding:1px 5px;border-radius:10px;background:var(--acc-text,#2a6df4);color:#fff;font:700 12px/16px Roboto,sans-serif;text-align:center;vertical-align:1px}
 
 /* переключатель «Моё местоположение ⇄ Завод», зум, пин */
-.rbar{display:flex;align-items:center;flex:1;min-width:0;background:var(--card);border-radius:16px;padding:4px;gap:2px;box-shadow:0 2px 12px rgba(0,0,0,.22)}
-.rbar .ep{flex:1;min-width:0;height:50px;border-radius:12px;display:flex;align-items:center;gap:8px;padding:0 10px;text-align:left;font:800 14px/1.2 var(--head);color:var(--ink);background:var(--raised)}
-.rbar .ep span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rbar .ep small{display:block;font:600 11px/1.2 var(--head);color:var(--mute)}
-.rbar .ep svg{width:20px;height:20px;flex:none;color:var(--acc)}
-.rbar .sw{width:44px;height:44px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--acc)}
-.rbar .sw svg{width:22px;height:22px}
 .fab.sm{width:48px;height:48px;font:600 26px/1 var(--head);padding-bottom:3px}
 .leaflet-control-zoom{display:none!important}
 .youpin i{display:block;width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--you);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45)}
@@ -323,7 +321,6 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 /* v: «Выбрать», бейдж рейса с иконкой, переключатель в нижней панели, без нижней навигации */
 .pinbar{display:flex;align-items:center;justify-content:center;text-align:center}
 .topbar{flex-direction:row;align-items:center;justify-content:space-between}.topbar .whenchip{flex:none}
-.sheet .rbar{flex:none;margin:0 14px 6px;background:var(--raised);box-shadow:none}.sheet .rbar .ep{background:var(--card)}
 .trow{display:flex;align-items:center;gap:2px;margin-left:-10px}.trow .titlebtn{flex:1;min-width:0}
 .backbtn{width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:50%;color:var(--ink)}.backbtn svg{width:26px;height:26px}
 .fast{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;background:var(--acc-soft,var(--raised));color:var(--acc-text);font:700 13px/1.5 var(--head);font-style:normal}
@@ -342,7 +339,6 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 .sheet[data-state="peek"] .body{display:block}
 /* оранжевый — только РЦ: метка, участок, остановки участка, иконка «Куда», линия в подробностях */
 .pin.rcp span{background:var(--rc)!important;color:var(--rc-ink)!important}
-.rbar .ep.plant.rc svg{color:var(--rc)}
 .node.rcl .rail::before{background:var(--rc);opacity:.85}
 
 /* прокрутка — только когда панель выдвинута до конца; в свёрнутом виде панель компактная */
@@ -351,14 +347,12 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 .sheet[data-state="peek"] .head{padding-bottom:4px}
 .sheet[data-state="peek"] .titlebtn{min-height:36px}
 .sheet[data-state="peek"] .titlebtn small,.sheet[data-state="peek"] .notice{display:none}
-.sheet[data-state="peek"] .rbar{margin-bottom:2px}.sheet[data-state="peek"] .rbar .ep{height:44px}
 .sheet[data-state="peek"] .grab{padding:6px 0 2px}
 
 /* v: свайп за всю панель, без случайной прокрутки, отступы, плашки */
 .sheet .body{overflow:hidden;overflow:clip}
 .sheet[data-state="full"] .body{overflow-y:auto;touch-action:pan-y}
 .sheet:not([data-state="full"]){touch-action:none}.drag{touch-action:none}
-.sheet .rbar{margin-top:12px}.sheet[data-state="peek"] .rbar{margin-top:6px}
 .badge.b614{border-color:var(--r614)}.badge.b797{border-color:var(--r797)}.badge.b478{border-color:var(--r478)}.badge.b566{border-color:var(--r566)}
 .badge.b614::before{background:var(--r614)}.badge.b797::before{background:var(--r797)}.badge.b478::before{background:var(--r478)}.badge.b566::before{background:var(--r566)}
 .nearwarn{display:flex;align-items:center;gap:10px;width:100%;margin:10px 0 12px;padding:11px 14px;border-radius:14px;background:var(--warn-bg);color:var(--warn);text-align:left;font:600 14px/1.3 var(--head);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent)}

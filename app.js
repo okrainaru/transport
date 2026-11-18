@@ -42,6 +42,9 @@ const ICONS = {
   user:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',
   bus:'<rect x="5" y="4" width="14" height="14" rx="3"/><path d="M5 12h14M8 21v-3M16 21v-3"/><circle cx="8.5" cy="15" r=".8"/><circle cx="15.5" cy="15" r=".8"/>',
   swap:'<path d="M7 7h11l-3-3M17 17H6l3 3"/>',
+  swapV:'<path d="M7 4v15M3.5 15.5 7 19l3.5-3.5M17 20V5M13.5 8.5 17 5l3.5 3.5"/>',
+  origin:'<circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/>',
+  dest:'<path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>',
   flag:'<path d="M6 21V4M6 5h11l-2 4 2 4H6"/>',
   pin:'<path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>',
   plane:'<path d="M21 3 3 10.5l7 2.5 2.5 7L21 3z"/><path d="M10 13 21 3"/>',
@@ -287,10 +290,9 @@ function openFrom(){
   if(!desktop()&&S.sheet==="peek") setSheet("half"); renderTop(); renderSheet(); drawMap({});
 }
 function renderFrom(head,body,foot){
-  head.innerHTML=`<div class="trow">${S.stop||S.user?`<button class="backbtn" type="button" data-act="from-back" aria-label="Назад">${svg("back")}</button>`:""}<div class="titlebtn"><span class="t"><h2>Откуда поедете?</h2></span></div></div>`;
+  head.innerHTML=`<div class="trow">${S.stop||S.user?`<button class="backbtn" type="button" data-act="from-back" aria-label="Назад">${svg("back")}</button>`:""}<div class="titlebtn"><span class="t"><h2>Откуда Вы поедете?</h2></span></div></div>`;
   body.innerHTML=`<label class="search">${svg("search")}<input id="addrQ" type="search" placeholder="Введите адрес" autocomplete="off" enterkeyhint="search"></label>
     <ul class="stoplist addr" id="addrRes"></ul>
-    <p class="small mute addrnote">Адрес ищется через сервис OpenStreetMap (Photon, Nominatim).</p>
     <div class="row2 frombtns"><button class="btn" type="button" data-act="locate">${svg("locate")}Определить меня</button><button class="btn sec" type="button" data-act="manual">${svg("pin")}Указать на карте</button></div>`;
   foot.hidden=true;
   const inp=$("addrQ");
@@ -371,7 +373,7 @@ function renderSheet(){
   const pr=pickRide(plan), sel=pr.sel;
   /* --- заголовок --- */
   if(!S.stop){
-    head.innerHTML=`<button class="titlebtn" type="button" data-act="pick-stop"><span class="t"><h2>Откуда поедете?</h2><small>Выберите остановку или определите, где вы</small></span>${svg("chev")}</button>`;
+    head.innerHTML=`<button class="titlebtn" type="button" data-act="pick-stop"><span class="t"><h2>Откуда Вы поедете?</h2><small>Выберите остановку или определите, где вы</small></span>${svg("chev")}</button>`;
   }else{
     const near=nearestStop(), isNear=near&&near.name===S.stop;
     const sub = dist!=null ? `${isNear&&!S.stopManual?"Ближайшая остановка":S.stopManual?"Остановка":"Удобная остановка"} · ${fmtDist(dist)} от вас` : "Остановка";
@@ -488,8 +490,8 @@ function timelineHTML(plan,pr,dist){
   if(sel.xfer){
     const l1=sel.legs[0], l2=sel.legs[1];
     const wait = (l1.arr&&l2.dep)?toMin(l2.dep)-toMin(l1.arr):null;
-    xferNode=`<li class="node${rcOf(l2)?" rcl":""}"><div class="rail"><div class="ico xfer">${svg("swap")}</div></div><div>
-      <h3>Пересадка: ${esc(sel.xfer)}</h3><div class="sub">${l1.arr||"?"} → ${l2.dep||"?"}${wait!=null?` · ждать ${human(wait)}`:""} · автобус <span class="badge b${l2.trip.route}" style="height:20px;min-width:34px;font-size:12px">${l2.trip.route}</span></div></div></li>`;
+    xferNode=`<li class="node${rcOf(l2)?" rcl":""}"><div class="rail"><div class="ico xfer">${svg("swapV")}</div></div><div>
+      <h3>Пересадка: ${esc(sel.xfer)}</h3><div class="sub">${l1.arr||"?"} → ${l2.dep||"?"}${wait!=null?` · ждать ${human(wait)}`:""} · автобус <span class="badge b${l2.trip.route}">${l2.trip.route}</span></div></div></li>`;
   }
 
   /* «Моё местоположение» + пешком / на машине */
@@ -517,25 +519,23 @@ function timelineHTML(plan,pr,dist){
 function renderTop(){
   const toP=S.dir==="to", plantName=S.dest===ENT?"Завод":S.dest;
   const meLbl=(S.user&&!S.stopManual)||!S.stop?"Моё местоположение":ql(S.stop);
-  const me=`<button type="button" class="ep" data-act="pick-stop">${svg("user")}<span><small>${toP?"Откуда":"Куда"}</small>${esc(meLbl)}</span></button>`;
-  const pl=`<button type="button" class="ep plant${S.dest===RC?" rc":""}" data-act="toggle-dest" title="Сменить: завод / РЦ Кудиново">${svg("bus")}<span><small>${toP?"Куда":"Откуда"}</small>${esc(plantName)}</span></button>`;
-  $("destSeg").innerHTML=(toP?me:pl)+`<button type="button" class="sw" data-act="swap" aria-label="Поменять местами" title="Поменять местами">${svg("swap")}</button>`+(toP?pl:me);
+  const me=`<button type="button" class="ep" data-act="pick-stop">${svg("origin")}<span class="tx"><small>${toP?"Откуда":"Куда"}</small><b>${esc(meLbl)}</b></span>${svg("chev")}</button>`;
+  const pl=`<button type="button" class="ep plant${S.dest===RC?" rc":""}" data-act="toggle-dest" title="Сменить: завод / РЦ Кудиново">${svg("dest")}<span class="tx"><small>${toP?"Куда":"Откуда"}</small><b>${esc(plantName)}</b></span>${svg("chev")}</button>`;
+  $("destSeg").innerHTML=`<div class="rf">${toP?me+pl:pl+me}</div><button type="button" class="sw" data-act="swap" aria-label="Поменять местами" title="Поменять местами">${svg("swapV")}</button>`;
   const chip=$("whenChip");
   chip.innerHTML=svg("plan")+esc(whenLabel());
   chip.classList.toggle("on",!!S.when);
   $("fabs").innerHTML=`<button class="fab sm" type="button" data-act="zoom" data-v="1" aria-label="Приблизить">+</button>
     <button class="fab sm" type="button" data-act="zoom" data-v="-1" aria-label="Отдалить">−</button>
+    <button class="fab" type="button" data-act="fit" aria-label="Показать маршрут" title="Показать маршрут">${svg("route")}</button>
     <button class="fab${S.user&&!S.user.manual?" on":""}" type="button" data-act="locate" aria-label="Где я" title="Где я">${svg("locate")}</button>`;
-  $("tabMap").innerHTML=svg("map")+"Карта";
-  $("tabSched").innerHTML=svg("list")+"Расписание";
+  $("schedBtn").innerHTML=svg("list")+"Расписание";
 }
 
 function setTab(t){
   S.tab=t;
   $("mapView").hidden = t!=="map";
   $("schedView").hidden = t!=="sched";
-  $("tabMap").setAttribute("aria-selected",t==="map");
-  $("tabSched").setAttribute("aria-selected",t==="sched");
   if(t==="map"){ setTimeout(()=>{ MAP.map&&MAP.map.invalidateSize(); setSheet(S.sheet); },30); }
   else renderSched();
 }
@@ -753,11 +753,10 @@ function setSheet(state){
   const startDrag=y=>{ sy=lastY=y; sh=sheet.offsetHeight; moved=false; active=true; lastT=performance.now(); vel=0;
     window.addEventListener("pointermove",move); window.addEventListener("pointerup",end); window.addEventListener("pointercancel",end); };
   let TY=0, TS=false, TD=false;
-  sheet.addEventListener("touchstart",e=>{ const b=$("sheetBody"); TY=e.touches[0].clientY; TD=false; TS=!desktop()&&S.sheet==="full"&&!e.target.closest("#drag")&&!!b&&b.scrollTop<=0; },{passive:true});
+  sheet.addEventListener("touchstart",e=>{ TY=e.touches[0].clientY; TD=false; TS=!desktop()&&!!e.target.closest("#drag"); },{passive:true});
   sheet.addEventListener("touchmove",e=>{ if(TD){ e.preventDefault(); return; } if(!TS) return; const dy=e.touches[0].clientY-TY; if(dy>6){ TD=true; e.preventDefault(); startDrag(TY); } else if(dy<-6) TS=false; },{passive:false});
   sheet.addEventListener("pointerdown",e=>{
-    if(desktop()||e.button>0) return;
-    if(S.sheet==="full" && !e.target.closest("#drag")) return;
+    if(desktop()||e.button>0||!e.target.closest("#drag")) return;
     sy=lastY=e.clientY; sh=sheet.offsetHeight; moved=false; active=true; lastT=performance.now(); vel=0;
     window.addEventListener("pointermove",move); window.addEventListener("pointerup",end); window.addEventListener("pointercancel",end);
   });
@@ -775,9 +774,10 @@ const MAP = {
   load(){
     if(!window.L){ toast("Не удалось загрузить карту: нет папки vendor/leaflet",8000); return; }
     try{
-      const map=this.map=L.map("map",{zoomControl:false,attributionControl:false,zoomSnap:0,zoomAnimationThreshold:8,minZoom:8,maxZoom:18,inertia:true,inertiaDeceleration:1700,inertiaMaxSpeed:2800,easeLinearity:.18,wheelDebounceTime:30,wheelPxPerZoomLevel:130,bounceAtZoomLimits:false,
+      const map=this.map=L.map("map",{zoomControl:false,attributionControl:false,zoomSnap:1,zoomDelta:1,zoomAnimationThreshold:8,minZoom:8,maxZoom:18,inertia:true,inertiaDeceleration:1700,inertiaMaxSpeed:2800,easeLinearity:.18,wheelDebounceTime:30,wheelPxPerZoomLevel:130,bounceAtZoomLimits:false,
         maxBounds:L.latLngBounds(CFG.searchBounds).pad(.6),maxBoundsViscosity:.8}).setView([55.83,38.35],10);
       L.tileLayer(CFG.tileUrl,{maxZoom:19,detectRetina:false,updateWhenIdle:false,keepBuffer:2}).addTo(map);
+      map.on("zoomend",()=>{ this.tz=null; });
       for(const k of ["route","stops","walk","pins","user"]) this.g[k]=L.layerGroup().addTo(map);
       this.ready=true;
       if(EDIT||CFG.geocodeMissing){ const c=store.get("bus.coords.v1",{}); for(const s of D.stops) if(!hasXY(s)&&c[s.name]) Object.assign(s,c[s.name]); }
@@ -787,6 +787,11 @@ const MAP = {
           const c=store.get("bus.coords.v1",{}); c[s.name]={lat:s.lat,lon:s.lon}; store.set("bus.coords.v1",c); toast(`«${s.name}» поставлена`,3000); S.editPick=null; renderEdit(); drawMap(); } }
       });
     }catch(e){ console.error(e); toast("Карта не запустилась: "+(e.message||e),8000); }
+  },
+  step(d){
+    if(!this.ready) return; const m=this.map;
+    const z=Math.max(m.getMinZoom(),Math.min(m.getMaxZoom(),(this.tz??m.getZoom())+d));
+    this.tz=z; m.flyTo(m.getCenter(),z,{duration:.35,easeLinearity:.25});
   },
   pad(){
     if(desktop()) return {tl:[464,96],br:[28,28]};
@@ -937,7 +942,8 @@ document.addEventListener("click",e=>{
     case "pick-stopres": { const x=STOPRES[+el.dataset.i]; if(x){ S.pinMode=false; placePin(); if(!desktop()&&S.sheet==="peek") setSheet("half"); selectStop(x.name); } break; }
     case "pin-back": S.pinMode=false; placePin(); openFrom(); break;
     case "toggle-dest": setDest(S.dest===ENT?RC:ENT); break;
-    case "zoom": if(MAP.ready){ const m=MAP.map; m.flyTo(m.getCenter(),Math.max(m.getMinZoom(),Math.min(m.getMaxZoom(),m.getZoom()+(+v>0?1:-1))),{duration:.6,easeLinearity:.25}); } break;
+    case "zoom": MAP.step(+v); break;
+    case "fit": drawMap(S.stop?{fit:"route",fly:true}:{fit:"all"}); break;
     case "locate-close": closeModal(); setTab("map"); startLocate(); break;
     case "manual-close": closeModal(); startManual(); break;
     case "mode": S.mode=v; store.set("bus.mode",v); renderSheet(); break;
