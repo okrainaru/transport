@@ -364,7 +364,9 @@ function renderNearby(head,body,foot){
   body.innerHTML=`<ul class="stoplist near">${NEAR.map((x,i)=>`<li><button type="button" data-act="pick-near" data-i="${i}"><span class="n">${esc(ql(x.name))}${best&&best.name===x.name?`<em class="fast">ближайший рейс</em>`:""}</span><span class="d">${svg("walk")}${fmtDist(x.d)} · ${x.min} мин</span></button></li>`).join("")||'<li class="empty">Рядом нет остановок этого направления</li>'}</ul>`;
   foot.hidden=true; body.scrollTop=0;
 }
+function syncCover(){ const c=$("cover"); if(c) c.hidden=!(S.locating&&!S.user&&!S.locErr); }
 function renderSheet(){
+  syncCover();
   const head=$("sheetHead"), body=$("sheetBody"), foot=$("sheetFoot");
   if(EDIT){ head.innerHTML=`<div class="titlebtn"><div class="t"><h2>Настройка карты</h2><small>Режим администратора</small></div></div>`; foot.hidden=true; renderEdit(); return; }
   foot.hidden=false;
@@ -377,11 +379,11 @@ function renderSheet(){
     head.innerHTML=`<button class="titlebtn" type="button" data-act="pick-stop"><span class="t"><h2>Откуда Вы поедете?</h2><small>Выберите остановку или укажите, где вы</small></span>${svg("chev")}</button>`;
   }else{
     const near=nearestStop(), isNear=near&&near.name===S.stop;
-    const sub = dist!=null ? `${isNear&&!S.stopManual?"Ближайшая остановка":S.stopManual?"Остановка":"Удобная остановка"} · ${fmtDist(dist)} от вас` : "Остановка";
+    const sub = dist!=null ? `${fmtDist(dist)} от вас` : "Остановка";
     let peek="";
     if(sel){
       const cd = (!plan.c.planned && plan.offset===0 && sel.dep) ? " · через "+human(toMin(sel.dep)-plan.c.min) : "";
-      peek=`<div class="peekline"><span>${sel.dep?sel.dep:"по требованию"}${plan.offset>0?" · "+dayWord(plan.date,plan.c.today):""}${esc(cd)}</span><span class="badge b${sel.trip.route}">${sel.trip.route}</span></div>`;
+      peek=`<div class="peekline"><span>${sel.dep?sel.dep:"по требованию"}${esc(cd)}</span></div>`;
     }else peek=`<div class="peekline mute">Рейсов нет</div>`;
     head.innerHTML=`<div class="trow"><button class="backbtn" type="button" data-act="nearby" aria-label="К ближайшим остановкам" title="К ближайшим остановкам">${svg("back")}</button><button class="titlebtn" type="button" data-act="pick-stop"><span class="t"><h2>${esc(ql(S.stop))}</h2><small>${sub}</small></span></button></div>${peek}${plantNote()}`;
   }
@@ -417,23 +419,13 @@ function renderSheet(){
     const near=nearestStop();
     if(S.user && near && near.name!==S.stop && S.locWarn!=="far")
       html+=`<button class="nearwarn" type="button" data-act="nearest">${svg("locate")}<span><b>Ближайшая:</b> ${esc(ql(near.name))} · ${fmtDist(near.d)}</span>${svg("back")}</button>`;
-    html+=timelineHTML(plan,pr,dist)+allTimesHTML();
+    html+=timelineHTML(plan,pr,dist);
   }
   body.innerHTML=html;
   /* --- переключатель направления (как в примере: внизу шторки) --- */
   foot.innerHTML=""; foot.style.display="none";
 }
 
-function allTimesHTML(){
-  if(!S.stop) return "";
-  const to=S.dir==="to", c=ctx(), cur=dkOf(c.date);
-  const g=[["work","Будни и воскресенье"],["sat","Суббота"]].map(([dk,name])=>{
-    const it=planDay(S.stop,S.dir,S.dest,dk).map(r=>({t:to?r.dep:r.arr,r})).sort((a,b)=>(a.t?toMin(a.t):1e5+toMin(a.r.trip.start))-(b.t?toMin(b.t):1e5+toMin(b.r.trip.start)));
-    if(!it.length) return "";
-    return `<div class="g">${name}${dk===cur?" · "+dayWord(c.date,c.today):""}</div><div class="tchips">${it.map(x=>`<span class="tchip${!x.t?" dem":""}${dk===cur&&x.t&&toMin(x.t)<c.min?" past":""}">${x.t||("рейс "+x.r.trip.start)}</span>`).join("")}</div>`;
-  }).join("");
-  return g?`<section class="alltimes"><h4>Все рейсы на остановке</h4>${g}</section>`:"";
-}
 function timelineHTML(plan,pr,dist){
   const sel=pr.sel, to=S.dir==="to", c=plan.c;
   const stopName=S.stop, destName=S.dest;
@@ -448,7 +440,6 @@ function timelineHTML(plan,pr,dist){
       ${SERVED[other][S.dir].has(S.stop)?`<button class="btn sec" type="button" data-act="dest" data-v="${esc(other)}">Показать рейсы ${to?"до ":"от "}${SHORT[other]}</button>`:""}</div>`;
     return out;
   }
-  const dayNote = plan.offset>0 ? `<div class="notice warn" style="margin:0 0 6px"><b>${c.planned?"На выбранное время рейсов больше нет":"Сегодня рейсов больше нет"}</b><span>Показываем рейсы: ${dayWord(plan.date,c.today)}.</span></div>` : "";
   const boardName = to ? stopName : destName;
   const alightName = to ? destName : stopName;
   const idx = pr.idx;
@@ -464,14 +455,23 @@ function timelineHTML(plan,pr,dist){
     : "";
   const tt = sel.trip;
   const rideCard = `<div class="ride">
-    ${(()=>{ const t=[first?"Ближайший автобус":(pr.auto?"Ближайший, на который успеете":""),plan.offset>0?dayWord(plan.date,c.today):""].filter(Boolean).join(" · "); return t?`<div class="lbl">${t}</div>`:""; })()}
-    <div class="big"><span class="t">${sel.dep?(sel.kind==="approx"?"≈":"")+sel.dep:tt.start}</span>${sel.dep?"":`<span class="dmq">по требованию</span>`}<span class="badge b${tt.route}">${tt.route}</span>${cd?`<span class="cd">${cd}</span>`:""}</div>
+    ${(()=>{ const t=first?"Ближайший автобус":(pr.auto?"Ближайший, на который успеете":""); return t?`<div class="lbl">${t}</div>`:""; })()}
+    <div class="big"><span class="t">${sel.dep?(sel.kind==="approx"?"≈":"")+sel.dep:tt.start}</span>${sel.dep?"":`<span class="dmq">по требованию</span>`}${cd?`<span class="cd">${cd}</span>`:""}</div>
     ${(()=>{ const m=[!sel.dep?"по требованию: ходит, если есть пассажиры":"",sel.kind==="rc"?"для сотрудников РЦ":"",sel.note?esc(sel.note):"",sel.xfer?"с пересадкой":""].filter(Boolean).join(" · "); return m?`<div class="meta">${m}</div>`:""; })()}
     ${leaveBy}</div>`;
-  /* остальные рейсы мелко */
-  const others = plan.rides.map((r,i)=>({r,i})).filter(x=>x.i!==idx);
-  const chips = others.length ? `<div class="others"><div class="lbl">${others.length===1?"Ещё один рейс":"Другие рейсы"}</div><div class="chips">${others.map(({r,i})=>
-    `<button type="button" class="rchip d${r.trip.route}${r.kind==="approx"?" ap":""}${r.dep?"":" dem"}" data-act="ride" data-i="${i}"><i class="dot"></i>${r.dep?(r.kind==="approx"?"≈":"")+r.dep:r.trip.start+" · по треб."}<span class="mute" style="font-weight:600">${r.trip.route}</span></button>`).join("")}</div></div>` : "";
+  /* другие рейсы этого дня на остановке: вертикальный список, прошедшие — без нажатия */
+  const toT=r=>to?r.dep:r.arr, dayKey=r=>r.dep?toMin(r.dep):1e5+toMin(r.trip.start);
+  const rows = planDay(S.stop,S.dir,S.dest,dkOf(plan.date)).sort((a,b)=>dayKey(a)-dayKey(b)).map(r=>{
+    const i=plan.rides.findIndex(x=>x.trip.id===r.trip.id&&x.dep===r.dep);
+    return {r,i};
+  }).filter(x=>x.i!==idx);
+  const others = rows.length ? `<div class="others"><div class="lbl">Другие рейсы</div>${rows.map(({r,i})=>{
+    const t=toT(r), past=i<0&&plan.offset===0&&r.dep&&toMin(r.dep)<c.min;
+    const label = t ? ((r.kind==="approx"?"≈":"")+t) : `${r.trip.start} · по требованию`;
+    return i>=0
+      ? `<button type="button" class="orow${r.kind==="approx"?" ap":""}${t?"":" dem"}" data-act="ride" data-i="${i}"><span>${label}</span>${svg("chevR")}</button>`
+      : `<div class="orow${past?" past":""}${t?"":" dem"}"><span>${label}</span></div>`;
+  }).join("")}</div>` : "";
   /* остановки в пути */
   const pathItems=[];
   sel.legs.forEach((leg,li)=>{
@@ -486,18 +486,17 @@ function timelineHTML(plan,pr,dist){
   const path = (inBetween<=0&&!sel.xfer) ? "" : `<details class="path" data-pk="${esc(pk)}"${S.pathOpen===pk?" open":""}><summary>Остановки в пути${inBetween>0?` (${inBetween})`:""}</summary><ul class="pathlist">${pathItems.join("")}</ul></details>`;
 
   const boardNode = `<li class="node${rcOf(sel.legs[0])?" rcl":""}"><div class="rail"><div class="ico">${svg("bus")}</div></div><div>
-      <h3>${esc(ql(boardName))}</h3><div class="sub">${to?"Посадка":"Отправление от "+(destName===ENT?"завода":"РЦ")}</div>${dayNote}${rideCard}${chips}${path}</div></li>`;
+      <h3>${esc(ql(boardName))}</h3>${to?"":`<div class="sub">Отправление от ${destName===ENT?"завода":"РЦ"}</div>`}${rideCard}${others}${path}</div></li>`;
 
-  const dur = (sel.dep&&sel.arr) ? ` · в пути ${human(toMin(sel.arr)-toMin(sel.dep))}` : "";
   const alightNode = `<li class="node${to?"":" dash"}"><div class="rail"><div class="ico plain"></div></div><div>
-      <h3>${esc(ql(alightName))}</h3><div class="sub">${sel.arr?`Прибытие в ${sel.arr}${dur}`:"Время прибытия не указано"}</div></div></li>`;
+      <h3>${esc(ql(alightName))}</h3><div class="sub">${sel.arr?`Прибытие в ${sel.arr}`:"Время прибытия не указано"}</div></div></li>`;
 
   let xferNode="";
   if(sel.xfer){
     const l1=sel.legs[0], l2=sel.legs[1];
     const wait = (l1.arr&&l2.dep)?toMin(l2.dep)-toMin(l1.arr):null;
-    xferNode=`<li class="node${rcOf(l2)?" rcl":""}"><div class="rail"><div class="ico xfer">${svg("swapV")}</div></div><div>
-      <h3>Пересадка: ${esc(sel.xfer)}</h3><div class="sub">${l1.arr||"?"} → ${l2.dep||"?"}${wait!=null?` · ждать ${human(wait)}`:""} · автобус <span class="badge b${l2.trip.route}">${l2.trip.route}</span></div></div></li>`;
+    xferNode=`<li class="node"><div class="rail"><div class="ico xfer">${svg("swapV")}</div></div><div>
+      <h3>Пересадка: ${esc(sel.xfer)}</h3><div class="sub">${l1.arr||"?"} → ${l2.dep||"?"}${wait!=null?` · ждать ${human(wait)}`:""}</div></div></li>`;
   }
 
   /* «Моё местоположение» + пешком / на машине */
@@ -505,11 +504,10 @@ function timelineHTML(plan,pr,dist){
   if(S.user){
     const w=dist!=null?walkMin(dist):null, cm=dist!=null?carMin(dist):null;
     you=`<li class="node${to?" dash":""}"><div class="rail"><div class="ico you">${svg("user")}</div></div><div>
-      <h3>Моё местоположение</h3><div class="sub">${S.user.manual?"указано вручную":"определено по датчикам телефона"}</div>
-      ${dist!=null?`<div class="leg seg flat" role="group" aria-label="Как добираться до остановки" style="margin-top:10px">
+      <h3>Моё местоположение</h3>
+      ${dist!=null?`<div class="leg seg flat" role="group" aria-label="Как добираться до остановки" style="margin-top:6px">
         <button type="button" data-act="mode" data-v="walk" aria-pressed="${S.mode==="walk"}">${svg("walk")}${w} мин</button>
-        <button type="button" data-act="mode" data-v="car" aria-pressed="${S.mode==="car"}">${svg("car")}${cm} мин</button></div>
-        <div class="sub small" style="margin-top:6px">До остановки ${fmtDist(dist)}, время примерное</div>`:`<div class="sub">У остановки нет координат</div>`}</div></li>`;
+        <button type="button" data-act="mode" data-v="car" aria-pressed="${S.mode==="car"}">${svg("car")}${cm} мин</button></div>`:`<div class="sub">У остановки нет координат</div>`}</div></li>`;
   }else{
     you=`<li class="node${to?" dash":""}"><div class="rail"><div class="ico you">${svg("user")}</div></div><div>
       <h3>Где вы?</h3><div class="sub">Определим расстояние и время до остановки</div>
@@ -951,6 +949,7 @@ document.addEventListener("click",e=>{
     case "toggle-dest": setDest(S.dest===ENT?RC:ENT); break;
     case "zoom": MAP.step(+v); break;
     case "origin": if(S.user&&S.locWarn!=="far"){ S.view="nearby"; if(!desktop()&&S.sheet==="peek") setSheet("half"); renderSheet(); drawMap({fit:"local"}); } else if(S.locErr==="denied"||S.locWarn==="far") openFrom(); else startLocate(); break;
+    case "cover-skip": S.locating=false; renderSheet(); break;
     case "locate-close": closeModal(); setTab("map"); startLocate(); break;
     case "manual-close": closeModal(); startManual(); break;
     case "mode": S.mode=v; store.set("bus.mode",v); renderSheet(); break;

@@ -174,13 +174,14 @@ path[tabindex]:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
 .ride .go svg{width:20px;height:20px;color:var(--acc-text);flex:none}
 .ride .go.late,.ride .go.late svg{color:var(--warn)}
 .others{margin-top:12px}
-.others .lbl{font-size:13px;color:var(--mute);margin-bottom:6px}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.rchip{display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 10px;border-radius:12px;background:var(--raised);font:700 14px/1 var(--head);color:var(--ink)}
-.rchip .dot{width:8px;height:8px;border-radius:50%;background:var(--rx)}
-.rchip.d614 .dot{background:var(--r614)}.rchip.d797 .dot{background:var(--r797)}.rchip.d478 .dot{background:var(--r478)}.rchip.d566 .dot{background:var(--r566)}
-.rchip.ap{font-weight:600;color:var(--mute)}
-.rchip.dem{border:1px dashed var(--mute);background:none;font-weight:600;color:var(--mute)}
+.others .lbl{font:700 13px var(--head);color:var(--mute);margin-bottom:4px}
+.orow{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:0 4px;border-bottom:1px solid var(--line);font:800 17px/1.2 var(--head);color:var(--ink)}
+.orow:last-child{border-bottom:0}
+.orow svg{margin-left:auto;width:18px;height:18px;color:var(--mute)}
+button.orow:active{background:var(--raised)}
+.orow.ap{font-weight:600;color:var(--mute)}
+.orow.dem{font-weight:600;color:var(--mute)}
+.orow.past{color:var(--mute);opacity:.6;font-weight:600}
 details.path{margin-top:10px}
 details.path summary{cursor:pointer;color:var(--acc-text);font:700 14.5px/1.3 var(--head);min-height:44px;display:flex;align-items:center;list-style:none}
 details.path summary::-webkit-details-marker{display:none}
@@ -336,7 +337,6 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 .sheet[data-state="peek"] .body{display:block}
 /* оранжевый — только РЦ: метка, участок, остановки участка, иконка «Куда», линия в подробностях */
 .pin.rcp span{background:var(--rc)!important;color:var(--rc-ink)!important}
-.node.rcl .rail::before{background:var(--rc);opacity:.85}
 
 /* прокрутка — только когда панель выдвинута до конца; в свёрнутом виде панель компактная */
 .sheet[data-state="full"] .body{overflow-y:auto}
@@ -355,8 +355,14 @@ html,body{touch-action:manipulation}input,select,textarea{font-size:16px}
 .nearwarn{display:flex;align-items:center;gap:10px;width:100%;margin:10px 0 12px;padding:11px 14px;border-radius:14px;background:var(--warn-bg);color:var(--warn);text-align:left;font:600 14px/1.3 var(--head);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent)}
 .nearwarn span{flex:1;min-width:0}.nearwarn svg{width:20px;height:20px;flex:none}.nearwarn svg:last-child{transform:rotate(180deg)}
 .nearwarn:hover,.nearwarn:active{filter:brightness(.96)}
-.alltimes{margin:18px 0 8px}.alltimes h4{margin:0 0 4px;font:800 15px var(--head)}.alltimes .g{margin:10px 0 6px;color:var(--mute);font:700 13px var(--head)}
-.tchips{display:flex;flex-wrap:wrap;gap:6px}.tchip{padding:5px 10px;border-radius:999px;background:var(--raised);font:700 14px var(--head);font-variant-numeric:tabular-nums}.tchip.past{opacity:.45}.tchip.dem{color:var(--mute);font-weight:600}
+.cover{position:fixed;inset:0;z-index:1500;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+.cover[hidden]{display:none}
+.cover-in{display:grid;justify-items:center;gap:10px;max-width:340px;text-align:center}
+.cover-in b{font:800 21px/1.2 var(--head)}
+.cover-in>span:not(.cover-ico){color:var(--mute);font-size:15px}
+.cover-in .btn{margin-top:14px;width:auto;padding:0 20px}
+.cover-ico{width:64px;height:64px;border-radius:50%;background:var(--acc);color:var(--acc-ink);display:flex;align-items:center;justify-content:center}
+.cover-ico svg{width:30px;height:30px}
 .selbtn{display:flex;align-items:center;justify-content:center;width:100%;height:50px;margin:8px 0 4px;border-radius:14px;background:var(--acc);color:var(--acc-ink);font:800 16px var(--head)}
 @media (min-width:860px){
   .pinbar{display:none!important}
